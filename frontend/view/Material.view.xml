@@ -182,7 +182,7 @@
           <uxap:ObjectPageSubSection title="Dublettenprüfung" titleUppercase="false">
             <VBox>
               <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
-                text="Kandidaten aus semantischer Nähe (Embeddings), unscharfem Namensvergleich und identischen Schlüsseln (EAN, Lieferanten-Teilenr.). Die KI-Bewertung mit {/config/model} unterscheidet echte Dubletten von Varianten."/>
+                text="Kandidaten aus semantischer Nähe (Embeddings), unscharfem Namensvergleich und identischen Schlüsseln (EAN, Lieferanten-Teilenr.). Die KI-Bewertung per LLM unterscheidet echte Dubletten von Varianten."/>
               <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
                 visible="{= !!${d>/candidates} &amp;&amp; !${d>/semantic_available} }"
                 text="Vektorindex leer - Kandidaten nur aus Text- und Schlüsselvergleich."/>
@@ -197,7 +197,7 @@
                     <ToolbarSpacer/>
                     <Button text="KI-Bewertung" icon="sap-icon://ai" type="Emphasized" press=".onAssess"
                       enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/candidates} &amp;&amp; ${d>/candidates}.length > 0 }"
-                      tooltip="Kandidaten mit {/config/model} bewerten lassen"/>
+                      tooltip="Kandidaten vom LLM bewerten lassen"/>
                   </OverflowToolbar>
                 </headerToolbar>
                 <columns>
