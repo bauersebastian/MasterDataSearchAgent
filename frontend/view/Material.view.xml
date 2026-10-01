@@ -1,0 +1,249 @@
+<mvc:View controllerName="fis.mdsa.controller.Material"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:uxap="sap.uxap" xmlns:form="sap.ui.layout.form"
+  xmlns:core="sap.ui.core" height="100%">
+  <uxap:ObjectPageLayout id="page" showFooter="false" upperCaseAnchorBar="false" busy="{m>/busy}"
+    busyIndicatorDelay="0" useIconTabBar="false" headerContentPinnable="true" toggleHeaderOnTitleClick="true">
+    <uxap:headerTitle>
+      <uxap:ObjectPageDynamicHeaderTitle>
+        <uxap:breadcrumbs>
+          <Breadcrumbs currentLocationText="Material {m>/matnr}">
+            <Link text="Materialsuche" press=".onBack"/>
+          </Breadcrumbs>
+        </uxap:breadcrumbs>
+        <uxap:expandedHeading>
+          <Title text="{m>/text}" wrapping="true"/>
+        </uxap:expandedHeading>
+        <uxap:snappedHeading>
+          <Title text="{m>/matnr} · {m>/text}" wrapping="true"/>
+        </uxap:snappedHeading>
+        <uxap:expandedContent>
+          <Text text="Material {m>/matnr}"/>
+        </uxap:expandedContent>
+        <uxap:actions>
+          <Button text="Dubletten prüfen" icon="sap-icon://compare" type="Emphasized" press=".onScrollToDuplicates"/>
+          <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
+        </uxap:actions>
+      </uxap:ObjectPageDynamicHeaderTitle>
+    </uxap:headerTitle>
+
+    <uxap:headerContent>
+      <FlexBox wrap="Wrap" fitContainer="true" alignItems="Start">
+        <VBox class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
+          <ObjectAttribute title="Materialart" text="{m>/mtart}"/>
+          <ObjectAttribute title="Warengruppe" text="{m>/matkl}"/>
+          <ObjectAttribute title="Basismengeneinheit" text="{m>/meins}"/>
+        </VBox>
+        <VBox class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
+          <ObjectAttribute title="EAN" text="{= ${m>/ean} || '-' }"/>
+          <ObjectAttribute title="Lieferanten" text="{= ${m>/vendors} &amp;&amp; ${m>/vendors}.length ? ${m>/vendors}.join(', ') : '-' }"/>
+          <ObjectAttribute title="Klasse" text="{= ${m>/classes} &amp;&amp; ${m>/classes}.length ? ${m>/classes}.join(', ') : '-' }"/>
+        </VBox>
+        <VBox class="sapUiSmallMarginBottom">
+          <ObjectStatus title="Status" text="{= ${m>/deleted} ? 'Löschvormerkung' : (${m>/status} ? 'Sperre ' + ${m>/status} : 'Aktiv') }"
+            state="{= ${m>/deleted} ? 'Error' : (${m>/status} ? 'Warning' : 'Success') }" inverted="true"/>
+        </VBox>
+      </FlexBox>
+    </uxap:headerContent>
+
+    <uxap:sections>
+      <uxap:ObjectPageSection title="Allgemein" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Grunddaten (MARA)" titleUppercase="false">
+            <form:SimpleForm id="generalForm" editable="false" layout="ColumnLayout" columnsM="2" columnsL="3" columnsXL="3"/>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Alle befüllten MARA-Felder" titleUppercase="false">
+            <Table items="{path: 'm>/maraFields', templateShareable: false}" growing="true" growingThreshold="20">
+              <columns>
+                <Column width="10rem"><Text text="Feld"/></Column>
+                <Column><Text text="Bezeichnung"/></Column>
+                <Column><Text text="Wert"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <Text text="{m>field}"/><Text text="{m>label}"/><Text text="{m>value}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Texte" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Kurztexte (MAKT)" titleUppercase="false">
+            <Table items="{path: 'm>/texts', templateShareable: false}" growing="true" growingThreshold="10">
+              <columns>
+                <Column width="6rem"><Text text="Sprache"/></Column>
+                <Column><Text text="Kurztext"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem><Text text="{m>SPRAS}"/><Text text="{m>MAKTX}"/></ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Langtexte (MTXT)" titleUppercase="false"
+            visible="{= !!${m>/long_texts} &amp;&amp; ${m>/long_texts}.length > 0 }">
+            <List items="{path: 'm>/long_texts', templateShareable: false}">
+              <FeedListItem sender="{m>label} ({m>TDID})" text="{m>text}" showIcon="false"/>
+            </List>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Mengeneinheiten" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Alternative Mengeneinheiten (MARM)" titleUppercase="false">
+            <Table items="{path: 'm>/marm', templateShareable: false}" noDataText="Keine Mengeneinheiten">
+              <columns>
+                <Column><Text text="Einheit"/></Column>
+                <Column hAlign="End"><Text text="Umrechnung"/></Column>
+                <Column><Text text="EAN"/></Column>
+                <Column hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text text="L x B x H"/></Column>
+                <Column hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text text="Volumen"/></Column>
+                <Column hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text text="Bruttogewicht"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <Text text="{m>MEINH}"/>
+                  <Text text="{m>UMREZ} / {m>UMREN} {m>/meins}"/>
+                  <Text text="{m>EAN11}"/>
+                  <Text text="{= ${m>LAENG} ? ${m>LAENG} + ' x ' + ${m>BREIT} + ' x ' + ${m>HOEHE} + ' ' + ${m>MEABM} : '' }"/>
+                  <Text text="{m>VOLUM} {m>VOLEH}"/>
+                  <Text text="{m>BRGEW} {m>GEWEI}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Klassifizierung" titleUppercase="false"
+        visible="{= !!${m>/mecl} &amp;&amp; ${m>/mecl}.length > 0 }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Klassen (MECL) und Merkmale (MEME)" titleUppercase="false">
+            <VBox>
+              <Table items="{path: 'm>/mecl', templateShareable: false}">
+                <columns>
+                  <Column><Text text="Klassenart"/></Column>
+                  <Column><Text text="Klasse"/></Column>
+                  <Column><Text text="Bezeichnung"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem>
+                    <Text text="{m>KLART} {m>KLART_BEZEI}"/><Text text="{m>CLASS}"/><Text text="{m>CLASS_BEZEI}"/>
+                  </ColumnListItem>
+                </items>
+              </Table>
+              <Table items="{path: 'm>/meme', templateShareable: false}" class="sapUiSmallMarginTop"
+                visible="{= ${m>/meme}.length > 0 }">
+                <columns>
+                  <Column><Text text="Klasse"/></Column>
+                  <Column><Text text="Merkmal"/></Column>
+                  <Column><Text text="Bezeichnung"/></Column>
+                  <Column><Text text="Wert"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem>
+                    <Text text="{m>CLASS}"/><Text text="{m>ATNAM}"/><Text text="{m>ATNAM_BEZEI}"/><Text text="{m>ATWRT}"/>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </VBox>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Einkauf" titleUppercase="false"
+        visible="{= !!${m>/eina} &amp;&amp; ${m>/eina}.length > 0 }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Einkaufsinfosätze (EINA)" titleUppercase="false">
+            <Table items="{path: 'm>/eina', templateShareable: false}" growing="true" growingThreshold="10">
+              <columns>
+                <Column><Text text="Lieferant"/></Column>
+                <Column><Text text="Lieferanten-Teilenr."/></Column>
+                <Column><Text text="Infosatz"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Bestellmengeneinheit"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Ursprungsland"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Telefon"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem highlight="{= ${m>LOEKZ} ? 'Error' : 'None' }">
+                  <Text text="{m>LIFNR}"/><Text text="{m>IDNLF}"/><Text text="{m>INFNR}"/>
+                  <Text text="{m>MEINS}"/><Text text="{m>URZLA}"/><Text text="{m>TELF1}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection id="duplicatesSection" title="Dubletten" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Dublettenprüfung" titleUppercase="false">
+            <VBox>
+              <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+                text="Kandidaten aus semantischer Nähe (Embeddings), unscharfem Namensvergleich und identischen Schlüsseln (EAN, Lieferanten-Teilenr.). Die KI-Bewertung mit {/config/model} unterscheidet echte Dubletten von Varianten."/>
+              <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+                visible="{= !!${d>/candidates} &amp;&amp; !${d>/semantic_available} }"
+                text="Vektorindex leer - Kandidaten nur aus Text- und Schlüsselvergleich."/>
+              <MessageStrip visible="{= !!${d>/assessment} }" text="{d>/assessment/summary}" showIcon="true"
+                type="{= ${d>/duplicateFound} ? 'Warning' : 'Success' }" customIcon="sap-icon://ai"
+                class="sapUiSmallMarginBottom"/>
+              <Table items="{path: 'd>/candidates', templateShareable: false}" busy="{d>/busy}" busyIndicatorDelay="0"
+                noDataText="Keine Kandidaten gefunden">
+                <headerToolbar>
+                  <OverflowToolbar>
+                    <Title text="Kandidaten ({= ${d>/candidates} ? ${d>/candidates}.length : 0 })" level="H3"/>
+                    <ToolbarSpacer/>
+                    <Button text="KI-Bewertung" icon="sap-icon://ai" type="Emphasized" press=".onAssess"
+                      enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/candidates} &amp;&amp; ${d>/candidates}.length > 0 }"
+                      tooltip="Kandidaten mit {/config/model} bewerten lassen"/>
+                  </OverflowToolbar>
+                </headerToolbar>
+                <columns>
+                  <Column width="9rem"><Text text="Material"/></Column>
+                  <Column><Text text="Kurztext"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Signale"/></Column>
+                  <Column hAlign="End" width="8rem"><Text text="Ähnlichkeit"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="KI-Bewertung"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem type="Navigation" press=".onCandidatePress"
+                    highlight="{= ${d>verdict/verdict} === 'Dublette' ? 'Error' : ${d>verdict/verdict} === 'Mögliche Dublette' ? 'Warning' : 'None' }">
+                    <ObjectIdentifier title="{d>matnr}" text="{d>mtart} / {d>meins}"/>
+                    <Text text="{d>text}"/>
+                    <HBox wrap="Wrap">
+                      <ObjectStatus text="{= ${d>shared}.join(', ') }" visible="{= ${d>shared}.length > 0 }" state="Error"
+                        inverted="true" icon="sap-icon://chain-link" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= ${d>semantic} !== null }" text="{= 'Semantisch ' + Math.round(${d>semantic} * 100) + ' %' }"
+                        state="Information" inverted="true" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus text="{= 'Name ' + Math.round(${d>name_similarity} * 100) + ' %' }" state="Indication05"
+                        inverted="true" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= !${d>same_unit} }" text="andere BME" state="Warning"/>
+                    </HBox>
+                    <ProgressIndicator percentValue="{d>score}" displayValue="{d>score} %" height="1.25rem"
+                      state="{= ${d>score} >= 90 ? 'Error' : ${d>score} >= 75 ? 'Warning' : 'None' }"/>
+                    <VBox>
+                      <ObjectStatus text="{d>verdict/verdict}" visible="{= !!${d>verdict} }"
+                        state="{= ${d>verdict/verdict} === 'Dublette' ? 'Error' : ${d>verdict/verdict} === 'Mögliche Dublette' ? 'Warning' : ${d>verdict/verdict} === 'Variante' ? 'Information' : 'Success' }"
+                        icon="{= ${d>verdict/verdict} === 'Dublette' ? 'sap-icon://error' : '' }"/>
+                      <Text text="{d>verdict/reason}" visible="{= !!${d>verdict} }" class="mdsaStatus"/>
+                    </VBox>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </VBox>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Suchdokument" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Eingebetteter Text (Vektor-DB)" titleUppercase="false">
+            <Text text="{m>/document}" class="mdsaDocument"/>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+    </uxap:sections>
+  </uxap:ObjectPageLayout>
+</mvc:View>

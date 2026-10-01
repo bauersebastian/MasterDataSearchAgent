@@ -1,0 +1,38 @@
+{
+  "_version": "1.60.0",
+  "sap.app": {
+    "id": "fis.mdsa",
+    "type": "application",
+    "i18n": { "bundleUrl": "i18n/i18n.properties", "supportedLocales": [""], "fallbackLocale": "" },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "applicationVersion": { "version": "1.0.0" }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": { "desktop": true, "tablet": true, "phone": true }
+  },
+  "sap.ui5": {
+    "rootView": { "viewName": "fis.mdsa.view.App", "type": "XML", "id": "app" },
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": { "sap.m": {}, "sap.f": {}, "sap.uxap": {}, "sap.ui.layout": {} }
+    },
+    "models": {
+      "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "fis.mdsa.i18n.i18n", "supportedLocales": [""], "fallbackLocale": "" } }
+    },
+    "routing": {
+      "config": { "routerClass": "sap.m.routing.Router", "type": "View", "viewType": "XML", "path": "fis.mdsa.view",
+        "controlId": "app", "controlAggregation": "pages", "async": true },
+      "routes": [
+        { "name": "search", "pattern": ":?query:", "target": "search" },
+        { "name": "material", "pattern": "material/{matnr}", "target": "material" }
+      ],
+      "targets": {
+        "search": { "id": "search", "name": "Search", "level": 1 },
+        "material": { "id": "material", "name": "Material", "level": 2 }
+      }
+    },
+    "resources": { "css": [{ "uri": "css/style.css" }] }
+  }
+}

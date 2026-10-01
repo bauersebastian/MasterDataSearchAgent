@@ -1,0 +1,9 @@
+# secrets
+.env
+
+# environments / caches
+.venv/
+__pycache__/
+.DS_Store
+
+# data/chroma (the vector DB) is bundled with the app on purpose -- do not ignore it

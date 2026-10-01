@@ -1,0 +1,142 @@
+<mvc:View controllerName="fis.mdsa.controller.Search"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:f="sap.f" xmlns:core="sap.ui.core" height="100%">
+  <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" headerPinned="true" fitContent="false">
+    <f:title>
+      <f:DynamicPageTitle>
+        <f:heading>
+          <HBox alignItems="Center">
+            <Image src="https://www.fis-gmbh.de/wp-content/uploads/de/img-logos/logos-fis/logo_fis_2022_blau.svg"
+              alt="FIS" height="2rem" class="sapUiSmallMarginEnd"/>
+            <Title text="{i18n>appTitle}" wrapping="true"/>
+          </HBox>
+        </f:heading>
+        <f:snappedContent>
+          <Text text="{/query}"/>
+        </f:snappedContent>
+        <f:actions>
+          <Button text="Zurücksetzen" icon="sap-icon://reset" type="Transparent" press=".onReset"/>
+        </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
+
+    <f:header>
+      <f:DynamicPageHeader pinnable="false">
+        <VBox class="mdsaSearchBox">
+          <SearchField id="searchField" value="{/query}" width="100%" enableSuggestions="true" maxLength="200"
+            placeholder="Material suchen - Materialnummer, EAN, Lieferanten-Teilenr. oder in eigenen Worten beschreiben"
+            search=".onSearch" suggest=".onSuggest" suggestionItems="{path: 'suggest>/items', templateShareable: false}">
+            <SuggestionItem key="{suggest>matnr}" text="{suggest>text}" description="{suggest>matnr}"/>
+          </SearchField>
+
+          <FlexBox wrap="Wrap" alignItems="Center" justifyContent="Center" class="sapUiSmallMarginTop">
+            <SegmentedButton selectedKey="{/mode}" selectionChange=".onModeChange" class="sapUiSmallMarginEnd">
+              <items>
+                <SegmentedButtonItem key="hybrid" text="Hybrid" icon="sap-icon://combine"
+                  tooltip="Semantische Suche und unscharfe Textsuche, per Reciprocal Rank Fusion kombiniert"/>
+                <SegmentedButtonItem key="semantic" text="Semantisch" icon="sap-icon://learning-assistant"
+                  tooltip="Bedeutungssuche über Embeddings ({/config/embedding_model}) in Chroma"/>
+                <SegmentedButtonItem key="lexical" text="Unscharf" icon="sap-icon://text"
+                  tooltip="Probabilistische Textsuche: BM25 mit Tippfehler-, Präfix- und Wortteil-Toleranz"/>
+              </items>
+            </SegmentedButton>
+            <MultiComboBox selectedKeys="{/mtart}" items="{path: '/config/facets/mtart', templateShareable: false}"
+              placeholder="Materialart" width="11rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{key}" additionalText="{count}"/>
+            </MultiComboBox>
+            <MultiComboBox selectedKeys="{/matkl}" items="{path: '/config/facets/matkl', templateShareable: false}"
+              placeholder="Warengruppe" width="11rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{key}" additionalText="{count}"/>
+            </MultiComboBox>
+            <MultiComboBox selectedKeys="{/vendor}" items="{path: '/config/facets/vendor', templateShareable: false}"
+              placeholder="Lieferant" width="11rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{key}" additionalText="{count}"/>
+            </MultiComboBox>
+            <CheckBox text="Gelöschte einbeziehen" selected="{/includeDeleted}" select=".onFilterChange"/>
+          </FlexBox>
+
+          <Text class="mdsaStatus sapUiTinyMarginTop" textAlign="Center" width="100%" visible="{/config/loaded}"
+            text="{= ${/config/materials} ? (${/config/materials} + ' Materialien · ' + ${/config/indexed} + ' im Vektorindex (' + ${/config/embedding_model} + ', ' + ${/config/embedding_dimensions} + ' Dim.)') : '' }"/>
+        </VBox>
+      </f:DynamicPageHeader>
+    </f:header>
+
+    <f:content>
+      <VBox>
+        <MessageStrip text="Backend nicht erreichbar: {/config/error}" type="Error" showIcon="true"
+          visible="{= !!${/config/error} }" class="sapUiSmallMarginBottom"/>
+        <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+          visible="{= ${/config/loaded} &amp;&amp; !${/config/error} &amp;&amp; (!${/config/indexed} || !${/config/openai_configured}) }"
+          text="{= !${/config/openai_configured}
+            ? 'OPENAI_API_KEY ist nicht konfiguriert - nur unscharfe Textsuche verfügbar, keine semantische Suche und keine KI-Dublettenprüfung.'
+            : 'Der Vektorindex ist leer - semantische Suche erst nach python -m backend.indexer verfügbar.' }"/>
+
+        <!-- landing page before the first search -->
+        <IllustratedMessage visible="{= !${/result} }" illustrationType="sapIllus-SimpleMagnifier"
+          title="Materialstamm durchsuchen" enableVerticalResponsiveness="true"
+          description="Suchen Sie exakt (Materialnummer, EAN, Lieferanten-Teilenummer), unscharf mit Tippfehlern oder beschreiben Sie das gesuchte Material in eigenen Worten.">
+          <additionalContent>
+            <FlexBox wrap="Wrap" justifyContent="Center" class="mdsaExamples"
+              items="{path: '/examples', templateShareable: false}">
+              <Button text="{text}" tooltip="{hint}" type="Ghost" press=".onExample"/>
+            </FlexBox>
+          </additionalContent>
+        </IllustratedMessage>
+
+        <VBox visible="{= !!${/result} }">
+          <MessageStrip visible="{= !!${/result/did_you_mean} }" type="Information" showIcon="true"
+            class="sapUiSmallMarginBottom" text="Unscharfe Treffer berücksichtigt">
+            <link>
+              <Link text="Meinten Sie: {/result/did_you_mean}" press=".onDidYouMean"/>
+            </link>
+          </MessageStrip>
+          <List items="{/result/warnings}" visible="{= ${/result/warnings}.length > 0 }" class="sapUiSmallMarginBottom">
+            <StandardListItem title="{}" icon="sap-icon://message-warning" highlight="Warning"/>
+          </List>
+
+          <Table id="hits" items="{path: '/result/hits', templateShareable: false}" growing="true" growingThreshold="25"
+            growingScrollToLoad="true" busy="{/busy}" busyIndicatorDelay="0" sticky="ColumnHeaders,HeaderToolbar"
+            noDataText="Keine Treffer - andere Schreibweise versuchen oder den Modus Semantisch nutzen" popinLayout="GridSmall">
+            <headerToolbar>
+              <OverflowToolbar>
+                <Title text="{= ${/result/total} === undefined ? 'Treffer' : ('Treffer (' + ${/result/total} + ')') }" level="H2"/>
+                <ToolbarSpacer/>
+                <Text text="{/resultInfo}" class="mdsaStatus"/>
+                <Button icon="sap-icon://hint" type="Transparent" tooltip="Wie wurde gesucht?" press=".onShowExpansions"
+                  visible="{= ${/result/expansions}.length > 0 }"/>
+              </OverflowToolbar>
+            </headerToolbar>
+            <columns>
+              <Column width="9rem"><Text text="Material"/></Column>
+              <Column><Text text="Kurztext"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true" width="8rem"><Text text="Art / Warengr."/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true" width="4rem"><Text text="BME"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true" width="9rem"><Text text="EAN"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Lieferanten-Teilenr."/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true" width="13rem"><Text text="Treffer über"/></Column>
+              <Column hAlign="End" width="8rem"><Text text="Relevanz"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem type="Navigation" press=".onHitPress" highlight="{= ${deleted} ? 'Error' : 'None' }">
+                <ObjectIdentifier title="{matnr}" text="{= ${deleted} ? 'Löschvormerkung' : '' }"/>
+                <FormattedText htmlText="{text_html}" class="mdsaHitText"/>
+                <Text text="{mtart} / {matkl}"/>
+                <Text text="{meins}"/>
+                <Text text="{ean}"/>
+                <Text text="{= ${vendor_parts}.join(', ') }" maxLines="2"/>
+                <HBox wrap="Wrap">
+                  <ObjectStatus visible="{= !!${exact} }" text="Exakt: {exact}" state="Success" inverted="true" class="sapUiTinyMarginEnd"/>
+                  <ObjectStatus visible="{= ${semantic} !== null }" text="{= 'Semantisch ' + Math.round(${semantic} * 100) + ' %' }"
+                    state="Information" inverted="true" class="sapUiTinyMarginEnd"/>
+                  <ObjectStatus visible="{= ${lexical} !== null }" text="{= 'Text ' + Math.round(${lexical} * 100) + ' %' }"
+                    state="Indication05" inverted="true"/>
+                </HBox>
+                <ProgressIndicator percentValue="{relevance}" displayValue="{relevance} %" height="1.25rem"
+                  state="{= ${relevance} >= 70 ? 'Success' : ${relevance} >= 40 ? 'Information' : 'None' }"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+        </VBox>
+      </VBox>
+    </f:content>
+  </f:DynamicPage>
+</mvc:View>
