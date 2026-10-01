@@ -6,4 +6,5 @@
 __pycache__/
 .DS_Store
 
-# data/chroma (the vector DB) is bundled with the app on purpose -- do not ignore it
+# vector DB -- built on the target machine with python -m backend.indexer
+data/

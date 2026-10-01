@@ -6,12 +6,13 @@ Google-like search over the SAP material master extract in `input/` (MARA, MAKT,
 - **backend/** – FastAPI service: loads the input files, hybrid search, duplicate check; serves the frontend.
 - **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): search page
   (List Report style) and material object page (`sap.uxap.ObjectPageLayout`).
-- **data/chroma/** – the Chroma vector DB with the embeddings of all materials. It is **part of the app** (demo):
-  build it once, then ship the folder with the app; at runtime only the search query is embedded.
+- **data/chroma/** – the Chroma vector DB with the embeddings of all materials. It is not part of the repository:
+  build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
 
 ## Setup
 
 ```bash
+git clone git@github.com:bauersebastian/MasterDataSearchAgent.git && cd MasterDataSearchAgent
 uv venv && uv pip install -r requirements.txt
 cp .env.example .env              # fill in OPENAI_API_KEY (and deployment names if they differ)
 .venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials, ~300k tokens, a few minutes)
