@@ -8,7 +8,6 @@
 .mdsaHitText strong { color: var(--sapHighlightColor); }
 .mdsaDocument { font-family: var(--sapFontFamilyMonospace, monospace); white-space: pre-wrap; }
 .mdsaExamples .sapMBtn { margin: 0.25rem; }
-/* landing page: UI5 limits the caption width (16-30rem), which breaks the title mid-word */
+/* landing page: smaller title so "Materialstamm durchsuchen" fits on one line */
 .mdsaLanding figcaption { max-width: 40rem; }
-.mdsaLanding .sapMTitle { overflow-wrap: normal; word-break: normal; hyphens: manual; }
-.mdsaEditor { border: 1px solid var(--sapField_BorderColor); border-radius: var(--sapField_BorderCornerRadius); }
+.mdsaLanding .sapMTitle { font-size: 1.25rem; white-space: nowrap; overflow: visible; text-overflow: clip; }
