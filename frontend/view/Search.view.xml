@@ -55,7 +55,7 @@
           </FlexBox>
 
           <Text class="mdsaStatus sapUiTinyMarginTop" textAlign="Center" width="100%" visible="{/config/loaded}"
-            text="{= ${/config/materials} ? (${/config/materials} + ' Materialien · ' + ${/config/indexed} + ' im Vektorindex (' + ${/config/embedding_model} + ', ' + ${/config/embedding_dimensions} + ' Dim.)') : '' }"/>
+            text="{= ${/config/materials} ? (${/config/materials} + ' Materialien · ' + ${/config/indexed} + ' im Vektorindex') : '' }"/>
         </VBox>
       </f:DynamicPageHeader>
     </f:header>
@@ -71,7 +71,7 @@
             : 'Der Vektorindex ist leer - semantische Suche erst nach python -m backend.indexer verfügbar.' }"/>
 
         <!-- landing page before the first search -->
-        <IllustratedMessage visible="{= !${/result} }" illustrationType="sapIllus-SimpleMagnifier"
+        <IllustratedMessage visible="{= !${/result} }" illustrationType="sapIllus-SimpleMagnifier" class="mdsaLanding"
           title="Materialstamm durchsuchen" enableVerticalResponsiveness="true"
           description="Suchen Sie exakt (Materialnummer, EAN, Lieferanten-Teilenummer), unscharf mit Tippfehlern oder beschreiben Sie das gesuchte Material in eigenen Worten.">
           <additionalContent>

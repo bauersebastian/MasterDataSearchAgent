@@ -8,3 +8,6 @@
 .mdsaHitText strong { color: var(--sapHighlightColor); }
 .mdsaDocument { font-family: var(--sapFontFamilyMonospace, monospace); white-space: pre-wrap; }
 .mdsaExamples .sapMBtn { margin: 0.25rem; }
+/* landing page: UI5 limits the caption width (16-30rem), which breaks the title mid-word */
+.mdsaLanding figcaption { max-width: 40rem; }
+.mdsaLanding .sapMTitle { overflow-wrap: normal; word-break: normal; hyphens: manual; }
