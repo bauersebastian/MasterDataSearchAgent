@@ -16,7 +16,7 @@
     "rootView": { "viewName": "fis.mdsa.view.App", "type": "XML", "id": "app" },
     "dependencies": {
       "minUI5Version": "1.120.0",
-      "libs": { "sap.m": {}, "sap.f": {}, "sap.uxap": {}, "sap.ui.layout": {} }
+      "libs": { "sap.m": {}, "sap.f": {}, "sap.uxap": {}, "sap.ui.layout": {}, "sap.ui.codeeditor": {} }
     },
     "models": {
       "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "fis.mdsa.i18n.i18n", "supportedLocales": [""], "fallbackLocale": "" } }

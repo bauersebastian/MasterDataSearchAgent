@@ -52,6 +52,7 @@ class Material:
     matnr: str                      # zero padded, as in SAP
     mara: dict
     texts: dict[str, str]           # language -> short text
+    makt: list[dict] = field(default_factory=list)
     marm: list[dict] = field(default_factory=list)
     mecl: list[dict] = field(default_factory=list)
     meme: list[dict] = field(default_factory=list)
@@ -153,6 +154,11 @@ class Material:
             "deleted": self.deleted,
         }
 
+    def tables(self) -> dict[str, list[dict]]:
+        """All rows of the material per SAP table, unchanged as in the extract."""
+        return {"MARA": [self.mara], "MAKT": self.makt, "MARM": self.marm, "MECL": self.mecl, "MEME": self.meme,
+                "MTXT": self.mtxt, "EINA": self.eina}
+
     def detail(self) -> dict:
         return {
             **self.summary(),
@@ -184,7 +190,8 @@ def load_materials() -> dict[str, Material]:
         for r in sub.get("MAKT", []):
             if r["MAKTX"] and r["SPRAS"] not in texts:
                 texts[r["SPRAS"]] = r["MAKTX"]
-        material = Material(matnr=mara["MATNR"], mara=mara, texts=texts, marm=sub.get("MARM", []),
+        material = Material(matnr=mara["MATNR"], mara=mara, texts=texts, makt=sub.get("MAKT", []),
+                            marm=sub.get("MARM", []),
                             mecl=sub.get("MECL", []), meme=sub.get("MEME", []), mtxt=sub.get("MTXT", []),
                             eina=sub.get("EINA", []))
         materials[material.id] = material

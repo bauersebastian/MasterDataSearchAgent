@@ -39,3 +39,18 @@ MAX_RESULTS = 200
 
 # --- Duplicate check ------------------------------------------------------
 DUPLICATE_CANDIDATES = 10
+
+# --- SAP endpoint (target = source system of the extract) ---------------------
+# FIS DXTO import web service, same message format as the MasterDataResearchAgent
+ENDPOINT_URL = os.getenv(
+    "SAP_ENDPOINT_URL",
+    "http://fis127.fis-gmbh.de:8000/sap/bc/srt/rfc/fismpm/dxto_imp_call/100/imp_master_data/s4k_100",
+)
+OPERATION = os.getenv("SAP_OPERATION", "_-fismpm_-dxtoImpCall")   # RFC-style SOAP operation element
+SOAP_ACTION = os.getenv("SAP_SOAP_ACTION", "")   # header is only sent when set
+REQUEST_TIMEOUT = int(os.getenv("SAP_REQUEST_TIMEOUT", "120"))   # seconds
+SEPARATOR = "^"
+VARIANT = os.getenv("SAP_VARIANT", "BRUNO")
+VIA_JOB = os.getenv("SAP_VIA_JOB", "X")
+JOB_NAME = os.getenv("SAP_JOB_NAME", "")
+KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATFS")   # key column of every table line, carries the material number

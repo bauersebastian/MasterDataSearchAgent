@@ -1,0 +1,40 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core" xmlns:code="sap.ui.codeeditor">
+  <Dialog id="sapDialog" title="Material {s>/matnr} an SAP senden" contentWidth="62rem" contentHeight="70%"
+    resizable="true" draggable="true" busy="{s>/busy}" busyIndicatorDelay="0" afterClose=".onSapDialogClosed">
+    <content>
+      <VBox class="sapUiSmallMargin">
+        <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+          text="Das Material wird unverändert so gesendet, wie es im Extrakt gespeichert ist - alle Tabellen, alle befüllten Felder. Ziel: {/config/sap_endpoint}"/>
+        <MessageStrip type="Warning" showIcon="true" visible="{= !!${s>/deleted} }" class="sapUiSmallMarginBottom"
+          text="Das Material hat eine Löschvormerkung."/>
+        <MessageStrip type="Error" showIcon="true" visible="{= !${/config/sap_configured} }" class="sapUiSmallMarginBottom"
+          text="SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert - Senden nicht möglich."/>
+        <HBox wrap="Wrap" items="{path: 's>/tables', templateShareable: false}" class="sapUiSmallMarginBottom">
+          <ObjectStatus title="{s>table}" text="{s>rows} Zeile(n), {s>fields} Felder" state="Information"
+            inverted="true" class="sapUiSmallMarginEnd sapUiTinyMarginBottom"/>
+        </HBox>
+        <IconTabBar selectedKey="{s>/tab}" expandable="false" applyContentPadding="false"
+          headerBackgroundDesign="Transparent" headerMode="Inline">
+          <items>
+            <IconTabFilter key="xml" text="XML" icon="sap-icon://source-code">
+              <code:CodeEditor type="xml" height="420px" editable="false" value="{s>/xml}" class="mdsaEditor"/>
+            </IconTabFilter>
+            <IconTabFilter key="response" text="SAP-Antwort" icon="sap-icon://response" visible="{= !!${s>/postResult} }">
+              <ObjectStatus title="HTTP" class="sapUiSmallMarginTopBottom" inverted="true"
+                text="{s>/postResult/status_code} {s>/postResult/reason}{= ${s>/postResult/fault} ? ' (SOAP-Fault)' : '' }"
+                state="{= ${s>/postResult/ok} ? 'Success' : 'Error' }"/>
+              <code:CodeEditor type="xml" height="380px" editable="false" value="{s>/postResult/body}" class="mdsaEditor"/>
+            </IconTabFilter>
+          </items>
+        </IconTabBar>
+      </VBox>
+    </content>
+    <buttons>
+      <Button text="Kopieren" icon="sap-icon://copy" press=".onCopyXml"/>
+      <Button text="Herunterladen" icon="sap-icon://download" press=".onDownloadXml"/>
+      <Button text="An SAP senden" type="Emphasized" icon="sap-icon://upload-to-cloud" press=".onPostToSap"
+        enabled="{= !!${/config/sap_configured} &amp;&amp; !!${s>/xml} }"/>
+      <Button text="Schließen" press=".onCloseSapDialog"/>
+    </buttons>
+  </Dialog>
+</core:FragmentDefinition>

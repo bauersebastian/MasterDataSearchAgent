@@ -20,7 +20,8 @@
           <Text text="Material {m>/matnr}"/>
         </uxap:expandedContent>
         <uxap:actions>
-          <Button text="Dubletten prüfen" icon="sap-icon://compare" type="Emphasized" press=".onScrollToDuplicates"/>
+          <Button text="Dubletten prüfen" icon="sap-icon://compare" press=".onScrollToDuplicates"/>
+          <Button text="An SAP senden" icon="sap-icon://upload-to-cloud" type="Emphasized" press=".onOpenSapDialog"/>
           <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
         </uxap:actions>
       </uxap:ObjectPageDynamicHeaderTitle>

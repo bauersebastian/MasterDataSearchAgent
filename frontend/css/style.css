@@ -11,3 +11,4 @@
 /* landing page: UI5 limits the caption width (16-30rem), which breaks the title mid-word */
 .mdsaLanding figcaption { max-width: 40rem; }
 .mdsaLanding .sapMTitle { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.mdsaEditor { border: 1px solid var(--sapField_BorderColor); border-radius: var(--sapField_BorderCornerRadius); }

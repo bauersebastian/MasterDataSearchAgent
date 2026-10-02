@@ -1,15 +1,17 @@
 """FastAPI service for the material master search; also serves the UI5 frontend."""
 import logging
 import os
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Literal, Optional
 
 import openai
+import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, duplicates, search, vectordb
+from . import config, duplicates, sap, search, vectordb
 from .data import load_materials
 
 log = logging.getLogger("mdsa")
@@ -38,6 +40,10 @@ class AssessRequest(BaseModel):
     candidates: Optional[list[str]] = None
 
 
+class PostRequest(BaseModel):
+    xml: str
+
+
 def openai_error(e: openai.OpenAIError) -> HTTPException:
     log.exception("OpenAI request failed")
     return HTTPException(502, f"OpenAI-Aufruf fehlgeschlagen: {e}")
@@ -53,6 +59,8 @@ def get_config() -> dict:
         "model": config.MODEL,
         "llm_endpoint": config.OPENAI_BASE_URL or "https://api.openai.com/v1",
         "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "sap_endpoint": config.ENDPOINT_URL,
+        "sap_configured": bool(os.getenv("SAP_USER") and os.getenv("SAP_PASSWORD")),
         "facets": search.facets(),
     }
 
@@ -106,6 +114,29 @@ def assess_duplicates(matnr: str, req: AssessRequest) -> dict:
         raise HTTPException(404, f"Material {matnr} nicht gefunden") from e
     except openai.OpenAIError as e:
         raise openai_error(e) from e
+
+
+@app.get("/api/materials/{matnr}/xml")
+def get_xml(matnr: str) -> dict:
+    m = load_materials().get(matnr)
+    if m is None:
+        raise HTTPException(404, f"Material {matnr} nicht gefunden")
+    return sap.message(m)
+
+
+@app.post("/api/sap/post")
+def post_to_sap(req: PostRequest) -> dict:
+    if not (os.getenv("SAP_USER") and os.getenv("SAP_PASSWORD")):
+        raise HTTPException(500, "SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert")
+    try:
+        ET.fromstring(req.xml.encode("utf-8"))
+    except ET.ParseError as e:
+        raise HTTPException(400, f"Das XML ist nicht wohlgeformt: {e}") from e
+    try:
+        return sap.post_xml(req.xml)
+    except requests.RequestException as e:
+        log.exception("SAP request failed")
+        raise HTTPException(502, f"SAP-Aufruf fehlgeschlagen: {e}") from e
 
 
 # UI5 app -- mounted last so the /api routes take precedence

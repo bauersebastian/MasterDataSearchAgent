@@ -1,7 +1,7 @@
 # Master Data Search Agent
 
 Google-like search over the SAP material master extract in `input/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA –
-14,372 materials), with an SAP Fiori (Horizon) UI and an AI duplicate check.
+14,372 materials), with an SAP Fiori (Horizon) UI, an AI duplicate check and posting a material to SAP.
 
 - **backend/** – FastAPI service: loads the input files, hybrid search, duplicate check; serves the frontend.
 - **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): search page
@@ -14,7 +14,7 @@ Google-like search over the SAP material master extract in `input/` (MARA, MAKT,
 ```bash
 git clone git@github.com:bauersebastian/MasterDataSearchAgent.git && cd MasterDataSearchAgent
 uv venv && uv pip install -r requirements.txt
-cp .env.example .env              # fill in OPENAI_API_KEY (and deployment names if they differ)
+cp .env.example .env              # fill in OPENAI_API_KEY, SAP_USER, SAP_PASSWORD (and deployment names if they differ)
 .venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials, ~300k tokens, a few minutes)
 .venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
@@ -52,6 +52,20 @@ weights, dimensions, EANs, vendors, classification) to `gpt-5.6-luna`, which cla
 *Dublette*, *Mögliche Dublette*, *Variante* (same family, different size/thread/colour …) or *Verschieden* with a
 reason.
 
+## Send to SAP
+
+*An SAP senden* on the object page posts the material to the FIS DXTO import web service (`SAP_ENDPOINT_URL`,
+default `fis127 … /s4k_100`, the source system of the extract) – same SOAP message as the MasterDataResearchAgent:
+
+- empty `<soap-env:Header/>`, HTTP basic auth (`SAP_USER` / `SAP_PASSWORD`), `Content-Type: text/xml`,
+  `SOAPAction` only when `SAP_SOAP_ACTION` is set; parameters `IfSep=^`, `IfVariant=BRUNO`, `IfViaJob=X`, `IfJobname`
+- the material is sent **unchanged as stored in the extract**: all tables (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA),
+  all rows, every field that is filled in at least one row, in the column order of the extract files; values are not
+  converted. Every line starts with the key field `MATFS` (`SAP_KEY_FIELD`) holding the material number (18 digits,
+  as in the extract) and ends with `^`
+- the dialog shows the XML (read-only, copy / download), asks for confirmation (with a warning for materials flagged
+  for deletion) and shows HTTP status and SAP response
+
 ## OpenAI endpoint
 
 As in the research agent, the default is the Azure OpenAI resource `https://fisg-openai-valuestream-aoi.openai.azure.com/`
@@ -69,9 +83,11 @@ to use api.openai.com instead.
 | GET | `/api/materials/{matnr}` | – | all data of a material |
 | GET | `/api/materials/{matnr}/duplicates` | – | duplicate candidates with signals |
 | POST | `/api/materials/{matnr}/duplicates/assess` | `{candidates: [matnr]}` (optional) | LLM verdicts |
+| GET | `/api/materials/{matnr}/xml` | – | SOAP message of the material, tables, endpoint |
+| POST | `/api/sap/post` | `{xml}` | `{ok, status_code, reason, fault, body}` |
 
 ## Notes
 
 - "Fiori elements" proper (`sap.fe` templates) needs an OData V4 service with annotations; this app uses freestyle
   SAPUI5 with the same floorplans (dynamic page / object page) and theme, like the research agent.
-- The app has **no user authentication**; bind it to `127.0.0.1` or put it behind a reverse proxy with auth/SSO.
+- The app has **no user authentication**; anyone who can reach it can post to SAP with the server's credentials. Bind it to `127.0.0.1` or put it behind a reverse proxy with auth/SSO.

@@ -6,8 +6,10 @@ sap.ui.define([
   "sap/m/MessageToast",
   "sap/m/Label",
   "sap/m/Text",
+  "sap/ui/core/Fragment",
+  "sap/ui/core/util/File",
   "fis/mdsa/controller/api"
-], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, api) => {
+], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Fragment, File, api) => {
   "use strict";
 
   // German labels of the MARA fields (the rest is shown with its technical name)
@@ -38,6 +40,7 @@ sap.ui.define([
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "m");
       this.getView().setModel(new JSONModel({ candidates: null, busy: false }), "d");
+      this.getView().setModel(new JSONModel({}), "s");
       this.getOwnerComponent().getRouter().getRoute("material").attachPatternMatched(this.onRouteMatched, this);
     },
 
@@ -103,6 +106,73 @@ sap.ui.define([
       } finally {
         d.setProperty("/busy", false);
       }
+    },
+
+    // --- send the material to SAP (DXTO import message, unchanged extract data) ---
+    async onOpenSapDialog() {
+      const s = this.getView().getModel("s");
+      s.setData({ matnr: this.matnr, busy: true, tab: "xml", postResult: null });
+      if (!this.sapDialog) {
+        this.sapDialog = await Fragment.load({ id: this.getView().getId(), name: "fis.mdsa.view.SapDialog", controller: this });
+        this.getView().addDependent(this.sapDialog);
+      }
+      this.sapDialog.open();
+      try {
+        const message = await api(`api/materials/${encodeURIComponent(this.matnr)}/xml`);
+        s.setData({ ...message, busy: false, tab: "xml", postResult: null });
+      } catch (e) {
+        s.setProperty("/busy", false);
+        MessageBox.error(`XML konnte nicht erzeugt werden: ${e.message}`);
+      }
+    },
+
+    onCloseSapDialog() {
+      this.sapDialog.close();
+    },
+
+    onSapDialogClosed() {
+      this.getView().getModel("s").setData({});
+    },
+
+    onCopyXml() {
+      navigator.clipboard.writeText(this.getView().getModel("s").getProperty("/xml"))
+        .then(() => MessageToast.show("XML in die Zwischenablage kopiert"))
+        .catch((e) => MessageBox.error(e.message));
+    },
+
+    onDownloadXml() {
+      const s = this.getView().getModel("s");
+      File.save(s.getProperty("/xml"), `material_${s.getProperty("/matnr")}`, "xml", "application/xml", "utf-8");
+    },
+
+    onPostToSap() {
+      const s = this.getView().getModel("s");
+      const matnr = s.getProperty("/matnr");
+      const warning = s.getProperty("/deleted") ? "\n\nAchtung: Das Material hat eine Löschvormerkung." : "";
+      MessageBox.confirm(`Material ${matnr} an SAP senden?\n\n${s.getProperty("/endpoint")}${warning}`, {
+        title: "An SAP senden",
+        emphasizedAction: MessageBox.Action.OK,
+        onClose: async (action) => {
+          if (action !== MessageBox.Action.OK) {
+            return;
+          }
+          s.setProperty("/busy", true);
+          try {
+            const result = await api("api/sap/post", { xml: s.getProperty("/xml") });
+            s.setProperty("/postResult", result);
+            s.setProperty("/tab", "response");
+            if (result.ok) {
+              MessageToast.show(`SAP hat die Nachricht angenommen (HTTP ${result.status_code})`);
+            } else {
+              MessageBox.error(`SAP-Aufruf fehlgeschlagen (HTTP ${result.status_code}${result.fault ? ", SOAP-Fault" : ""}). Details im Reiter SAP-Antwort.`);
+            }
+          } catch (e) {
+            MessageBox.error(`Senden fehlgeschlagen: ${e.message}`);
+          } finally {
+            s.setProperty("/busy", false);
+          }
+        }
+      });
     },
 
     onScrollToDuplicates() {
