@@ -53,4 +53,5 @@ SEPARATOR = "^"
 VARIANT = os.getenv("SAP_VARIANT", "BRUNO")
 VIA_JOB = os.getenv("SAP_VIA_JOB", "X")
 JOB_NAME = os.getenv("SAP_JOB_NAME", "")
-KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATFS")   # key column of every table line, carries the material number
+# key column of every table line: MATNR changes the existing material (MATFS would create a new one)
+KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATNR")

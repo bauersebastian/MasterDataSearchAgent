@@ -61,8 +61,9 @@ default `fis127 … /s4k_100`, the source system of the extract) – same SOAP m
   `SOAPAction` only when `SAP_SOAP_ACTION` is set; parameters `IfSep=^`, `IfVariant=BRUNO`, `IfViaJob=X`, `IfJobname`
 - the material is sent **unchanged as stored in the extract**: all tables (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA),
   all rows, every field that is filled in at least one row, in the column order of the extract files; values are not
-  converted. Every line starts with the key field `MATFS` (`SAP_KEY_FIELD`) holding the material number (18 digits,
-  as in the extract) and ends with `^`
+  converted. Every line starts with the key field `MATNR` (`SAP_KEY_FIELD`) holding the material number (18 digits,
+  as in the extract) and ends with `^` – with `MATNR` the import **changes the existing material** (`MATFS`, as used by
+  the research agent, would create a new one)
 - the dialog shows the XML (read-only, copy / download), asks for confirmation (with a warning for materials flagged
   for deletion) and shows HTTP status and SAP response
 

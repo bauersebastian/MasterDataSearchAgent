@@ -24,7 +24,7 @@ def xml_tables(material: Material) -> dict[str, list[str]]:
     tables = {}
     for table, rows in material.tables().items():
         if rows:
-            fields = [f for f in rows[0] if f not in SKIP_FIELDS and any(r.get(f) for r in rows)]
+            fields = [f for f in rows[0] if f not in SKIP_FIELDS | {KEY_FIELD} and any(r.get(f) for r in rows)]
             tables[table] = [KEY_FIELD] + fields
     return tables
 
