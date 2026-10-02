@@ -55,7 +55,7 @@
           </FlexBox>
 
           <Text class="mdsaStatus sapUiTinyMarginTop" textAlign="Center" width="100%" visible="{/config/loaded}"
-            text="{= ${/config/materials} ? (${/config/materials} + ' Materialien · ' + ${/config/indexed} + ' im Vektorindex') : '' }"/>
+            text="{= ${/config/materials} ? (${/config/materials} + ' Materialien · ' + ${/config/indexed} + ' im Vektorindex (' + ${/config/embedding_dimensions} + ' Dimensionen)') : '' }"/>
         </VBox>
       </f:DynamicPageHeader>
     </f:header>
