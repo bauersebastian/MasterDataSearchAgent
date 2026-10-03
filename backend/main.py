@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import bom, config, duplicates, sap, search, vectordb
+from . import ai_search, bom, config, duplicates, sap, search, vectordb
 from .data import load_materials
 
 log = logging.getLogger("mdsa")
@@ -28,7 +28,7 @@ app = FastAPI(title="Master Data Search Agent", lifespan=lifespan)
 
 class SearchRequest(BaseModel):
     query: str
-    mode: Literal["hybrid", "semantic", "lexical"] = "hybrid"
+    mode: Literal["hybrid", "semantic", "lexical", "ai"] = "hybrid"
     mtart: list[str] = []
     matkl: list[str] = []
     vendor: list[str] = []
@@ -71,12 +71,14 @@ def run_search(req: SearchRequest) -> dict:
     if not req.query.strip():
         raise HTTPException(400, "Bitte einen Suchbegriff eingeben")
     if req.mode != "lexical" and not os.getenv("OPENAI_API_KEY"):
-        if req.mode == "semantic":
-            raise HTTPException(500, "OPENAI_API_KEY ist nicht konfiguriert - semantische Suche nicht möglich")
+        if req.mode in ("semantic", "ai"):
+            raise HTTPException(500, "OPENAI_API_KEY ist nicht konfiguriert - semantische Suche und KI-Suche nicht möglich")
         req.mode = "lexical"
+    filters = req.model_dump(include={"mtart", "matkl", "vendor", "include_deleted"})
     try:
-        return search.search(req.query, req.mode, req.model_dump(include={"mtart", "matkl", "vendor", "include_deleted"}),
-                             req.limit)
+        if req.mode == "ai":
+            return ai_search.ai_search(req.query, filters)
+        return search.search(req.query, req.mode, filters, req.limit)
     except openai.OpenAIError as e:
         raise openai_error(e) from e
 

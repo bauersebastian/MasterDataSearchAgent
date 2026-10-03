@@ -16,9 +16,11 @@ sap.ui.define([
     { text: "Leuchte fürs Büro, neutralweiß", hint: "Semantisch: neutralweiß = Lichtfarbe 840" },
     { text: "Befestigung für Porenbeton", hint: "Semantisch: Gasbetondübel" },
     { text: "4021598024366", hint: "Exakt: EAN" },
-    { text: "20156", hint: "Exakt: Materialnummer" }
+    { text: "20156", hint: "Exakt: Materialnummer" },
+    { text: "Veganes Waschmittel ohne Mikroplastik mit Inhaltsstoffen aus EU-Anbau", hint: "KI-Suche: Anforderungen anhand der Merkmale prüfen", mode: "ai" },
+    { text: "Tieflöffel aus Edelstahl für einen Minibagger bis 2 Tonnen", hint: "KI-Suche: Merkmal und Langtext auswerten", mode: "ai" }
   ];
-  const MODE_TEXT = { hybrid: "Hybrid", semantic: "Semantisch", lexical: "Unscharf" };
+  const MODE_TEXT = { hybrid: "Hybrid", semantic: "Semantisch", lexical: "Unscharf", ai: "KI-Suche" };
 
   return Controller.extend("fis.mdsa.controller.Search", {
     onInit() {
@@ -72,7 +74,7 @@ sap.ui.define([
     async onSuggest(event) {
       const field = event.getSource();
       const value = event.getParameter("suggestValue").trim();
-      if (value.length < 2) {
+      if (value.length < 2 || this.model.getProperty("/mode") === "ai") {   // AI requests are sentences, not names
         this.getView().getModel("suggest").setProperty("/items", []);
         return;
       }
@@ -101,7 +103,11 @@ sap.ui.define([
     },
 
     onExample(event) {
-      this.navigate(event.getSource().getText());
+      const example = event.getSource().getBindingContext().getObject();
+      if (example.mode && this.model.getProperty("/config/openai_configured")) {
+        this.model.setProperty("/mode", example.mode);
+      }
+      this.navigate(example.text);
     },
 
     onDidYouMean() {
@@ -133,6 +139,7 @@ sap.ui.define([
       try {
         const result = await api("api/search", body);
         m.setProperty("/result", result);
+        m.setProperty("/aiInfo", result.interpretation ? this.formatInterpretation(result) : "");
         const seconds = ((performance.now() - started) / 1000).toFixed(2);
         const shown = result.total > result.hits.length ? `, die besten ${result.hits.length} angezeigt` : "";
         m.setProperty("/resultInfo", `${MODE_TEXT[result.mode]} · ${seconds} s${shown}`);
@@ -144,6 +151,14 @@ sap.ui.define([
       } finally {
         m.setProperty("/busy", false);
       }
+    },
+
+    // "Verstanden als: ..." line of the AI search
+    formatInterpretation(result) {
+      const i = result.interpretation;
+      const requirements = i.requirements.length ? ` · Anforderungen: ${i.requirements.map((r) => r.text).join("; ")}` : "";
+      return `Verstanden als: ${i.product} · Suchbegriffe: ${i.search_terms}${requirements} · `
+        + `${result.candidates_checked} Kandidaten anhand der Stammdaten geprüft`;
     },
 
     onHitPress(event) {

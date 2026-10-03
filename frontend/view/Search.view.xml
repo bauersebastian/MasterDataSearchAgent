@@ -29,7 +29,7 @@
           </SearchField>
 
           <FlexBox wrap="Wrap" alignItems="Center" justifyContent="Center" class="sapUiSmallMarginTop">
-            <SegmentedButton selectedKey="{/mode}" selectionChange=".onModeChange" width="22rem" class="sapUiSmallMarginEnd">
+            <SegmentedButton selectedKey="{/mode}" selectionChange=".onModeChange" width="31rem" class="sapUiSmallMarginEnd">
               <items>
                 <SegmentedButtonItem key="hybrid" text="Hybrid" icon="sap-icon://combine"
                   tooltip="Semantische Suche und unscharfe Textsuche, per Reciprocal Rank Fusion kombiniert"/>
@@ -37,6 +37,8 @@
                   tooltip="Bedeutungssuche über Embeddings ({/config/embedding_model}) in Chroma"/>
                 <SegmentedButtonItem key="lexical" text="Unscharf" icon="sap-icon://text"
                   tooltip="Probabilistische Textsuche: BM25 mit Tippfehler-, Präfix- und Wortteil-Toleranz"/>
+                <SegmentedButtonItem key="ai" text="KI-Suche" icon="sap-icon://ai" enabled="{= !!${/config/openai_configured} }"
+                  tooltip="Anfrage in eigenen Worten: das LLM erkennt Produkt und Anforderungen und prüft die Treffer anhand der Stammdaten"/>
               </items>
             </SegmentedButton>
             <MultiComboBox selectedKeys="{/mtart}" items="{path: '/config/facets/mtart', templateShareable: false}"
@@ -77,7 +79,7 @@
           <additionalContent>
             <FlexBox wrap="Wrap" justifyContent="Center" class="mdsaExamples"
               items="{path: '/examples', templateShareable: false}">
-              <Button text="{text}" tooltip="{hint}" type="Ghost" press=".onExample"/>
+              <Button text="{text}" tooltip="{hint}" type="Ghost" press=".onExample" icon="{= ${mode} === 'ai' ? 'sap-icon://ai' : '' }"/>
             </FlexBox>
           </additionalContent>
         </IllustratedMessage>
@@ -89,6 +91,11 @@
               <Link text="Meinten Sie: {/result/did_you_mean}" press=".onDidYouMean"/>
             </link>
           </MessageStrip>
+          <VBox visible="{= ${/result/mode} === 'ai' &amp;&amp; !!${/result/interpretation} }" class="sapUiSmallMarginBottom">
+            <MessageStrip type="{= ${/result/total} > 0 ? 'Success' : 'Warning' }" customIcon="sap-icon://ai" showIcon="true"
+              text="{/result/summary}" class="sapUiTinyMarginBottom"/>
+            <Text class="mdsaStatus" text="{/aiInfo}"/>
+          </VBox>
           <List items="{/result/warnings}" visible="{= ${/result/warnings}.length > 0 }" class="sapUiSmallMarginBottom">
             <StandardListItem title="{}" icon="sap-icon://message-warning" highlight="Warning"/>
           </List>
@@ -112,7 +119,9 @@
               <Column minScreenWidth="Desktop" demandPopin="true" width="4rem"><Text text="BME"/></Column>
               <Column minScreenWidth="Desktop" demandPopin="true" width="9rem"><Text text="EAN"/></Column>
               <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Lieferanten-Teilenr."/></Column>
-              <Column minScreenWidth="Tablet" demandPopin="true" width="13rem"><Text text="Treffer über"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true" width="{= ${/result/mode} === 'ai' ? '26rem' : '13rem' }">
+                <Text text="{= ${/result/mode} === 'ai' ? 'KI-Bewertung' : 'Treffer über' }"/>
+              </Column>
               <Column hAlign="End" width="8rem"><Text text="Relevanz"/></Column>
             </columns>
             <items>
@@ -130,13 +139,24 @@
                 <Text text="{meins}"/>
                 <Text text="{ean}"/>
                 <Text text="{= ${vendor_parts}.join(', ') }" maxLines="2"/>
-                <HBox wrap="Wrap" class="mdsaBadges">
+                <VBox>
+                <VBox visible="{= !!${ai_verdict} }">
+                  <ObjectStatus text="{ai_verdict}" state="{= ${ai_verdict} === 'passend' ? 'Success' : 'Warning' }" inverted="true"/>
+                  <HBox wrap="Wrap" class="mdsaBadges sapUiTinyMarginTop" items="{path: 'ai_checks', templateShareable: false}">
+                    <ObjectStatus text="{requirement}" tooltip="{= ${evidence} || 'nicht in den Stammdaten' }" class="sapUiTinyMarginEnd"
+                      icon="{= ${status} === 'belegt' ? 'sap-icon://accept' : ${status} === 'widerspricht' ? 'sap-icon://decline' : 'sap-icon://question-mark' }"
+                      state="{= ${status} === 'belegt' ? 'Success' : ${status} === 'widerspricht' ? 'Error' : 'None' }"/>
+                  </HBox>
+                  <Text text="{ai_reason}" class="mdsaStatus"/>
+                </VBox>
+                <HBox wrap="Wrap" class="mdsaBadges" visible="{= !${ai_verdict} }">
                   <ObjectStatus visible="{= !!${exact} }" text="Exakt: {exact}" state="Success" inverted="true" class="sapUiTinyMarginEnd"/>
                   <ObjectStatus visible="{= ${semantic} !== null }" text="{= 'Semantisch ' + Math.round(${semantic} * 100) + ' %' }"
                     state="Information" inverted="true" class="sapUiTinyMarginEnd"/>
                   <ObjectStatus visible="{= ${lexical} !== null }" text="{= 'Text ' + Math.round(${lexical} * 100) + ' %' }"
                     state="Indication05" inverted="true"/>
                 </HBox>
+                </VBox>
                 <ProgressIndicator percentValue="{relevance}" displayValue="{relevance} %" height="1.25rem"
                   state="{= ${relevance} >= 70 ? 'Success' : ${relevance} >= 40 ? 'Information' : 'None' }"/>
               </ColumnListItem>
