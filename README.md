@@ -82,6 +82,8 @@ default `fis127 … /s4k_100`, the source system of the extract) – same SOAP m
 
 - empty `<soap-env:Header/>`, HTTP basic auth (`SAP_USER` / `SAP_PASSWORD`), `Content-Type: text/xml`,
   `SOAPAction` only when `SAP_SOAP_ACTION` is set; parameters `IfSep=^`, `IfVariant=BRUNO`, `IfViaJob=X`, `IfJobname`
+- logon language German: URL parameter `sap-language=DE` and `Accept-Language: de` (`SAP_LOGON_LANGUAGE`);
+  otherwise SAP may log on in the service/system language (EN) and convert the German unit codes wrongly
 - the material is sent **unchanged as stored in the extract**: all tables (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA and,
   if the material is a BOM header, its STKO / STPO rows),
   all rows, every field that is filled in at least one row, in the column order of the extract files; values are not

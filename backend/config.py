@@ -49,6 +49,9 @@ ENDPOINT_URL = os.getenv(
 OPERATION = os.getenv("SAP_OPERATION", "_-fismpm_-dxtoImpCall")   # RFC-style SOAP operation element
 SOAP_ACTION = os.getenv("SAP_SOAP_ACTION", "")   # header is only sent when set
 REQUEST_TIMEOUT = int(os.getenv("SAP_REQUEST_TIMEOUT", "120"))   # seconds
+# Logon language of the SOAP call (URL parameter sap-language + Accept-Language). Without it SAP may fall back to
+# the service or system language (e.g. EN), and the import converts the German unit codes (ST, KAR, ...) wrongly.
+SAP_LOGON_LANGUAGE = os.getenv("SAP_LOGON_LANGUAGE", "DE")
 SEPARATOR = "^"
 VARIANT = os.getenv("SAP_VARIANT", "BRUNO")
 VIA_JOB = os.getenv("SAP_VIA_JOB", "X")

@@ -6,8 +6,8 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-from .config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SEPARATOR, SOAP_ACTION, VARIANT,
-                     VIA_JOB)
+from .config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SAP_LOGON_LANGUAGE, SEPARATOR,
+                     SOAP_ACTION, VARIANT, VIA_JOB)
 from .data import Material
 
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
@@ -76,8 +76,11 @@ def post_xml(xml: str) -> dict:
     """Post the SOAP message; returns status and response body instead of raising on SAP errors."""
     response = requests.post(
         ENDPOINT_URL,
+        params={"sap-language": SAP_LOGON_LANGUAGE} if SAP_LOGON_LANGUAGE else None,
         data=xml.encode("utf-8"),
-        headers={"Content-Type": "text/xml; charset=utf-8", **({"SOAPAction": SOAP_ACTION} if SOAP_ACTION else {})},
+        headers={"Content-Type": "text/xml; charset=utf-8",
+                 **({"SOAPAction": SOAP_ACTION} if SOAP_ACTION else {}),
+                 **({"Accept-Language": SAP_LOGON_LANGUAGE.lower()} if SAP_LOGON_LANGUAGE else {})},
         auth=(os.environ["SAP_USER"], os.environ["SAP_PASSWORD"]),
         timeout=REQUEST_TIMEOUT,
     )
