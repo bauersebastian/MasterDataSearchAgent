@@ -229,8 +229,13 @@
             </VBox>
           </uxap:ObjectPageSubSection>
           <uxap:ObjectPageSubSection title="Stücklisten des Materials (STKO)" titleUppercase="false"
-            visible="{= !!${b>/headers} &amp;&amp; ${b>/headers}.length > 0 }">
-            <Table items="{path: 'b>/headers', templateShareable: false}">
+            visible="{= ${b>/headers_total} > 0 }">
+            <Table items="{path: 'b>/headers', templateShareable: false}" noDataText="Keine Stückliste für diese Auswahl">
+              <headerToolbar>
+                <OverflowToolbar style="Clear">
+                  <Text class="mdsaStatus" text="{= ${b>/headers}.length + ' von ' + ${b>/headers_total} + ' Stücklisten' + (${b>/stlan} || ${b>/werks} ? ' (gefiltert)' : '') }"/>
+                </OverflowToolbar>
+              </headerToolbar>
               <columns>
                 <Column><Text text="Verwendung"/></Column>
                 <Column><Text text="Alternative"/></Column>
@@ -249,7 +254,7 @@
             </Table>
           </uxap:ObjectPageSubSection>
           <uxap:ObjectPageSubSection title="Strukturstückliste (mehrstufig)" titleUppercase="false"
-            visible="{= !!${b>/headers} &amp;&amp; ${b>/headers}.length > 0 }">
+            visible="{= ${b>/headers_total} > 0 }">
             <t:TreeTable id="explosionTable" rows="{path: 'b>/explosion', parameters: {arrayNames: ['children']}}" selectionMode="None"
               enableColumnReordering="false" noData="Keine Positionen für diese Auswahl">
               <t:rowMode><trm:Fixed rowCount="{b>/explosionRows}"/></t:rowMode>

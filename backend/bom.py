@@ -165,11 +165,13 @@ def structure(mid: str, stlan: str = "", werks: str = "") -> dict:
                 "werks": h.get("WRKAN", ""), "base": f"{number(h['BMENG'])} {h['BMEIN']}" if h.get("BMENG") else "",
                 "valid_from": h.get("DATUV", ""), "status": h.get("STLST", ""),
                 "items": sum(1 for i in m.stpo if (i["STLNR"], i["STLAL"]) == (h["STLNR"], h["STLAL"]))}
-               for h in m.stko]
+               for h in m.stko
+               if (not stlan or h["STLAN"] == stlan) and (not werks or h.get("WRKAN", "") == werks)]
     down, _ = links()
     return {
         "matnr": mid,
         "headers": headers,
+        "headers_total": len(m.stko),
         "explosion": explode(mid, stlan, werks),
         "where_used": where_used(mid, stlan, werks),
         "graph": graph(mid, stlan, werks),
