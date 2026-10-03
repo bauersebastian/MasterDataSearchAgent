@@ -13,3 +13,5 @@
 .mdsaLanding .sapMTitle { font-size: 1.25rem; white-space: nowrap; overflow: visible; text-overflow: clip; }
 .mdsaBadges .sapMObjStatus { margin-bottom: 0.125rem; }
 .mdsaBadges .sapMObjStatusText { white-space: nowrap; }
+.mdsaHelp { max-width: 60rem; margin: 0 auto; padding: 1rem; box-sizing: border-box; }
+.mdsaHelp li { margin-bottom: 0.25rem; }

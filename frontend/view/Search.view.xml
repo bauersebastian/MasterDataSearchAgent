@@ -15,6 +15,7 @@
         </f:snappedContent>
         <f:actions>
           <Button text="Zurücksetzen" icon="sap-icon://reset" type="Transparent" press=".onReset"/>
+          <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
         </f:actions>
       </f:DynamicPageTitle>
     </f:title>

@@ -26,11 +26,13 @@
         "controlId": "app", "controlAggregation": "pages", "async": true },
       "routes": [
         { "name": "search", "pattern": ":?query:", "target": "search" },
-        { "name": "material", "pattern": "material/{matnr}", "target": "material" }
+        { "name": "material", "pattern": "material/{matnr}", "target": "material" },
+        { "name": "help", "pattern": "hilfe", "target": "help" }
       ],
       "targets": {
         "search": { "id": "search", "name": "Search", "level": 1 },
-        "material": { "id": "material", "name": "Material", "level": 2 }
+        "material": { "id": "material", "name": "Material", "level": 2 },
+        "help": { "id": "help", "name": "Help", "level": 2 }
       }
     },
     "resources": { "css": [{ "uri": "css/style.css" }] }

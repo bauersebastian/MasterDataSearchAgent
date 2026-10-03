@@ -1,0 +1,9 @@
+<mvc:View controllerName="fis.mdsa.controller.Help" xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" height="100%">
+  <Page title="Hilfe – so funktioniert die Materialsuche" showNavButton="true" navButtonPress=".onBack">
+    <VBox class="sapUiResponsiveContentPadding mdsaHelp" items="{path: 'help>/sections', templateShareable: false}">
+      <Panel headerText="{help>title}" expandable="true" expanded="true" class="sapUiSmallMarginBottom">
+        <FormattedText htmlText="{help>html}"/>
+      </Panel>
+    </VBox>
+  </Page>
+</mvc:View>

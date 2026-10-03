@@ -161,6 +161,10 @@ sap.ui.define([
         + `${result.candidates_checked} Kandidaten anhand der Stammdaten geprüft`;
     },
 
+    onHelp() {
+      this.getOwnerComponent().getRouter().navTo("help");
+    },
+
     onHitPress(event) {
       const matnr = event.getSource().getBindingContext().getProperty("matnr");
       this.getOwnerComponent().getRouter().navTo("material", { matnr });
