@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, duplicates, sap, search, vectordb
+from . import bom, config, duplicates, sap, search, vectordb
 from .data import load_materials
 
 log = logging.getLogger("mdsa")
@@ -92,6 +92,13 @@ def get_material(matnr: str) -> dict:
     if m is None:
         raise HTTPException(404, f"Material {matnr} nicht gefunden")
     return m.detail()
+
+
+@app.get("/api/materials/{matnr}/bom")
+def get_bom(matnr: str, stlan: str = "", werks: str = "") -> dict:
+    if matnr not in load_materials():
+        raise HTTPException(404, f"Material {matnr} nicht gefunden")
+    return bom.structure(matnr, stlan, werks)
 
 
 @app.get("/api/materials/{matnr}/duplicates")

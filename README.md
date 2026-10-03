@@ -1,7 +1,8 @@
 # Master Data Search Agent
 
 Google-like search over the SAP material master extract in `input/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA –
-14,372 materials), with an SAP Fiori (Horizon) UI, an AI duplicate check and posting a material to SAP.
+14,372 materials – plus the bills of material STKO / STPO), with an SAP Fiori (Horizon) UI, BOM relationship
+visualization, an AI duplicate check and posting a material to SAP.
 
 - **backend/** – FastAPI service: loads the input files, hybrid search, duplicate check; serves the frontend.
 - **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): search page
@@ -31,7 +32,10 @@ Without `OPENAI_API_KEY` or without a built index the app still works with the f
 ## Search
 
 One search document per material: short texts (D/E/F/N), long texts (basic data, purchase order, sales, internal
-note), class names and readable feature values (see the *Suchdokument* section on the object page).
+note), class names, readable feature values and the BOM context: the names of the direct components
+(*Stückliste aus: …*) and of the BOMs the material is used in (*Verwendet in Stückliste: …*) – so the semantic search
+finds an assembly through its parts (see the *Suchdokument* section on the object page). The BOM context is not used
+for the fuzzy text search, otherwise every assembly would match the words of its components.
 
 | Mode | How |
 |---|---|
@@ -42,6 +46,24 @@ note), class names and readable feature values (see the *Suchdokument* section o
 
 Every hit shows which retriever found it and with which score; the *?* button explains how the query words were
 expanded. Filters: material type, material group, vendor, include materials flagged for deletion.
+
+## Bills of material
+
+`STKO` (BOM header, keyed by the header material) and `STPO` (items, component in `IDNRK`) are optional input files.
+The object page of a material that is a BOM header or a component shows the section *Stücklisten*:
+
+- **Beziehungsgraph** (`sap.suite.ui.commons.networkgraph`, layered, left to right): the material in the middle, all
+  BOMs it is used in on the left (all levels up to the top), its components on the right (all levels down). Node
+  button → open the material; lines carry quantity and BOM (usage / alternative / plant)
+- **Stücklisten des Materials**: its BOM headers (usage, alternative, plant, base quantity, items)
+- **Strukturstückliste (mehrstufig)**: multi-level explosion. Top level: all BOMs of the material; below, like
+  CS12, one BOM per component – same plant (or plant independent), preferably the same usage, lowest alternative
+- **Verwendungsnachweis (mehrstufig)**: multi-level where-used list (like CS15) up to the top-level materials
+- filter by usage (1 Fertigung, 2 Konstruktion, 3 Universal, 5 Vertrieb …) and plant for graph and trees
+
+Cycles (a BOM containing the material itself, as FG126 in the extract) are detected and marked, not followed.
+Search hits show the badges *Stückliste* and *in n Stücklisten*. After adding or changing BOM files, run the indexer
+again – it only re-embeds the materials whose BOM context changed.
 
 ## Duplicate check
 
@@ -59,7 +81,8 @@ default `fis127 … /s4k_100`, the source system of the extract) – same SOAP m
 
 - empty `<soap-env:Header/>`, HTTP basic auth (`SAP_USER` / `SAP_PASSWORD`), `Content-Type: text/xml`,
   `SOAPAction` only when `SAP_SOAP_ACTION` is set; parameters `IfSep=^`, `IfVariant=BRUNO`, `IfViaJob=X`, `IfJobname`
-- the material is sent **unchanged as stored in the extract**: all tables (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA),
+- the material is sent **unchanged as stored in the extract**: all tables (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA and,
+  if the material is a BOM header, its STKO / STPO rows),
   all rows, every field that is filled in at least one row, in the column order of the extract files; values are not
   converted. Every line starts with the key field `MATNR` (`SAP_KEY_FIELD`) holding the material number (18 digits,
   as in the extract) and ends with `^` – with `MATNR` the import **changes the existing material** (`MATFS`, as used by
@@ -82,6 +105,7 @@ to use api.openai.com instead.
 | POST | `/api/search` | `{query, mode: hybrid\|semantic\|lexical, mtart[], matkl[], vendor[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `text_html`; `did_you_mean`, `expansions` |
 | GET | `/api/suggest?q=` | – | up to 8 suggestions (fuzzy text search only, no embedding call) |
 | GET | `/api/materials/{matnr}` | – | all data of a material |
+| GET | `/api/materials/{matnr}/bom?stlan=&werks=` | – | BOM headers, explosion, where-used list, graph, filter values |
 | GET | `/api/materials/{matnr}/duplicates` | – | duplicate candidates with signals |
 | POST | `/api/materials/{matnr}/duplicates/assess` | `{candidates: [matnr]}` (optional) | LLM verdicts |
 | GET | `/api/materials/{matnr}/xml` | – | SOAP message of the material, tables, endpoint |

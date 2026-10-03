@@ -36,11 +36,16 @@ sap.ui.define([
     ["Materialstatus", (m) => m.mara.MSTAE], ["Löschvormerkung", (m) => (m.mara.LVORM ? "Ja" : "")]
   ];
 
+  // visible rows of a fully expanded tree table: all nodes, between 1 and 15
+  const countNodes = (nodes) => nodes.reduce((n, node) => n + 1 + countNodes(node.children || []), 0);
+  const rowCount = (nodes) => Math.min(Math.max(countNodes(nodes), 1), 15);
+
   return Controller.extend("fis.mdsa.controller.Material", {
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "m");
       this.getView().setModel(new JSONModel({ candidates: null, busy: false }), "d");
       this.getView().setModel(new JSONModel({}), "s");
+      this.getView().setModel(new JSONModel({}), "b");
       this.getOwnerComponent().getRouter().getRoute("material").attachPatternMatched(this.onRouteMatched, this);
     },
 
@@ -62,7 +67,58 @@ sap.ui.define([
         MessageBox.error(`Material ${matnr} konnte nicht geladen werden: ${e.message}`);
         return;
       }
+      this.getView().getModel("b").setData({ stlan: "", werks: "" });
+      this.loadBom(matnr);
       this.loadCandidates(matnr);
+    },
+
+    // --- bill of material relations (graph, multi-level explosion and where-used list) ---
+    async loadBom(matnr) {
+      const b = this.getView().getModel("b");
+      const params = new URLSearchParams({ stlan: b.getProperty("/stlan") || "", werks: b.getProperty("/werks") || "" });
+      try {
+        const result = await api(`api/materials/${encodeURIComponent(matnr)}/bom?${params}`);
+        if (matnr !== this.matnr) {
+          return;
+        }
+        b.setData({
+          ...result, stlan: b.getProperty("/stlan"), werks: b.getProperty("/werks"),
+          usageItems: [{ key: "", text: "Alle Verwendungen" }, ...result.options.stlan],
+          plantItems: [{ key: "", text: "Alle Werke" }, ...result.options.werks],
+          explosionRows: rowCount(result.explosion), whereUsedRows: rowCount(result.where_used)
+        });
+        // show the whole structure expanded (the extract has at most 4 levels)
+        ["explosionTable", "where_usedTable"].forEach((id) => this.byId(id).expandToLevel(10));
+      } catch (e) {
+        MessageToast.show(`Stücklisten konnten nicht geladen werden: ${e.message}`);
+      }
+    },
+
+    // large graphs: zoom out so that all nodes are visible (the toolbar's "zoom to fit" - no public API for it)
+    onGraphReady(event) {
+      const graph = event.getSource();
+      if (typeof graph._fitToScreen === "function" && graph.$scroller
+        && (graph._iWidth > graph.$scroller.width() || graph._iHeight > graph.$scroller.height())) {
+        graph._fitToScreen();
+      }
+    },
+
+    onBomFilterChange() {
+      this.loadBom(this.matnr);
+    },
+
+    onBomMaterialPress(event) {
+      const matnr = event.getSource().getBindingContext("b").getProperty("matnr");
+      if (matnr && matnr !== this.matnr) {
+        this.getOwnerComponent().getRouter().navTo("material", { matnr });
+      }
+    },
+
+    onGraphNodeOpen(event) {
+      const matnr = event.getSource().getParent().getKey();
+      if (matnr !== this.matnr) {
+        this.getOwnerComponent().getRouter().navTo("material", { matnr });
+      }
     },
 
     buildGeneralForm(material) {

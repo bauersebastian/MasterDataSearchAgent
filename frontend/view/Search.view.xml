@@ -29,7 +29,7 @@
           </SearchField>
 
           <FlexBox wrap="Wrap" alignItems="Center" justifyContent="Center" class="sapUiSmallMarginTop">
-            <SegmentedButton selectedKey="{/mode}" selectionChange=".onModeChange" class="sapUiSmallMarginEnd">
+            <SegmentedButton selectedKey="{/mode}" selectionChange=".onModeChange" width="22rem" class="sapUiSmallMarginEnd">
               <items>
                 <SegmentedButtonItem key="hybrid" text="Hybrid" icon="sap-icon://combine"
                   tooltip="Semantische Suche und unscharfe Textsuche, per Reciprocal Rank Fusion kombiniert"/>
@@ -118,12 +118,19 @@
             <items>
               <ColumnListItem type="Navigation" press=".onHitPress" highlight="{= ${deleted} ? 'Error' : 'None' }">
                 <ObjectIdentifier title="{matnr}" text="{= ${deleted} ? 'Löschvormerkung' : '' }"/>
-                <FormattedText htmlText="{text_html}" class="mdsaHitText"/>
+                <VBox>
+                  <FormattedText htmlText="{text_html}" class="mdsaHitText"/>
+                  <HBox visible="{= !!${bom} || ${used_in} > 0 }">
+                    <ObjectStatus text="Stückliste" icon="sap-icon://tree" state="Information" visible="{= !!${bom} }" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus text="{= 'in ' + ${used_in} + (${used_in} === 1 ? ' Stückliste' : ' Stücklisten') }"
+                      icon="sap-icon://chain-link" state="Information" visible="{= ${used_in} > 0 }"/>
+                  </HBox>
+                </VBox>
                 <Text text="{mtart} / {matkl}"/>
                 <Text text="{meins}"/>
                 <Text text="{ean}"/>
                 <Text text="{= ${vendor_parts}.join(', ') }" maxLines="2"/>
-                <HBox wrap="Wrap">
+                <HBox wrap="Wrap" class="mdsaBadges">
                   <ObjectStatus visible="{= !!${exact} }" text="Exakt: {exact}" state="Success" inverted="true" class="sapUiTinyMarginEnd"/>
                   <ObjectStatus visible="{= ${semantic} !== null }" text="{= 'Semantisch ' + Math.round(${semantic} * 100) + ' %' }"
                     state="Information" inverted="true" class="sapUiTinyMarginEnd"/>

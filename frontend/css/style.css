@@ -11,3 +11,5 @@
 /* landing page: smaller title so "Materialstamm durchsuchen" fits on one line */
 .mdsaLanding figcaption { max-width: 40rem; }
 .mdsaLanding .sapMTitle { font-size: 1.25rem; white-space: nowrap; overflow: visible; text-overflow: clip; }
+.mdsaBadges .sapMObjStatus { margin-bottom: 0.125rem; }
+.mdsaBadges .sapMObjStatusText { white-space: nowrap; }

@@ -1,6 +1,7 @@
 <mvc:View controllerName="fis.mdsa.controller.Material"
   xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:uxap="sap.uxap" xmlns:form="sap.ui.layout.form"
-  xmlns:core="sap.ui.core" height="100%">
+  xmlns:core="sap.ui.core" xmlns:t="sap.ui.table" xmlns:trm="sap.ui.table.rowmodes"
+  xmlns:ng="sap.suite.ui.commons.networkgraph" xmlns:ngl="sap.suite.ui.commons.networkgraph.layout" height="100%">
   <uxap:ObjectPageLayout id="page" showFooter="false" upperCaseAnchorBar="false" busy="{m>/busy}"
     busyIndicatorDelay="0" useIconTabBar="false" headerContentPinnable="true" toggleHeaderOnTitleClick="true">
     <uxap:headerTitle>
@@ -178,6 +179,140 @@
         </uxap:subSections>
       </uxap:ObjectPageSection>
 
+      <uxap:ObjectPageSection id="bomSection" title="Stücklisten" titleUppercase="false" visible="{= !!${b>/has_relations} }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Beziehungsgraph" titleUppercase="false">
+            <VBox>
+              <OverflowToolbar style="Clear">
+                <Label text="Verwendung" labelFor="bomUsage"/>
+                <Select id="bomUsage" selectedKey="{b>/stlan}" change=".onBomFilterChange" width="12rem"
+                  items="{path: 'b>/usageItems', templateShareable: false}">
+                  <core:Item key="{b>key}" text="{b>text}"/>
+                </Select>
+                <Label text="Werk" labelFor="bomPlant"/>
+                <Select id="bomPlant" selectedKey="{b>/werks}" change=".onBomFilterChange" width="10rem"
+                  items="{path: 'b>/plantItems', templateShareable: false}">
+                  <core:Item key="{b>key}" text="{b>text}"/>
+                </Select>
+                <ToolbarSpacer/>
+                <Text class="mdsaStatus" text="{= ${b>/graph/nodes} ? (${b>/graph/nodes}.length + ' Materialien · links: verwendet in, rechts: Komponenten') : '' }"/>
+              </OverflowToolbar>
+              <MessageStrip visible="{= !!${b>/self_reference} }" type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+                text="Die Stückliste enthält das Material selbst als Komponente (Zyklus) - im Graph nicht dargestellt."/>
+              <MessageStrip visible="{= !!${b>/graph/truncated} }" type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+                text="Der Graph ist auf 150 Materialien begrenzt."/>
+              <ng:Graph id="bomGraph" height="{= Math.min(Math.max((${b>/graph/widest} || 1) * 120 + 100, 320), 1600) + 'px' }" orientation="LeftRight" enableWheelZoom="false" graphReady=".onGraphReady"
+                nodes="{path: 'b>/graph/nodes', templateShareable: false}" lines="{path: 'b>/graph/lines', templateShareable: false}"
+                noDataText="Keine Stücklistenbeziehungen für diese Auswahl">
+                <ng:layoutAlgorithm><ngl:LayeredLayout/></ng:layoutAlgorithm>
+                <ng:statuses>
+                  <ng:Status key="current" title="Aktuelles Material" backgroundColor="sapUiListSelectionBackgroundColor" borderColor="sapUiAccent6" borderWidth="3px"/>
+                  <ng:Status key="parent" title="Verwendet in" borderColor="sapUiAccent8" backgroundColor="sapUiTileBackground"/>
+                  <ng:Status key="child" title="Komponente" borderColor="sapUiAccent4" backgroundColor="sapUiTileBackground"/>
+                </ng:statuses>
+                <ng:nodes>
+                  <ng:Node key="{b>key}" title="{b>title}" description="{b>matnr}" status="{b>role}" shape="Box"
+                    width="220" titleLineSize="2" showActionLinksButton="false" showExpandButton="false"
+                    icon="{= ${b>is_bom} ? 'sap-icon://tree' : 'sap-icon://product' }">
+                    <ng:attributes>
+                      <ng:ElementAttribute label="Material" value="{b>matnr}"/>
+                    </ng:attributes>
+                    <ng:actionButtons>
+                      <ng:ActionButton icon="sap-icon://action" title="Material öffnen" press=".onGraphNodeOpen"/>
+                    </ng:actionButtons>
+                  </ng:Node>
+                </ng:nodes>
+                <ng:lines>
+                  <ng:Line from="{b>from}" to="{b>to}" title="Menge {b>title}" description="{b>description}"/>
+                </ng:lines>
+              </ng:Graph>
+            </VBox>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Stücklisten des Materials (STKO)" titleUppercase="false"
+            visible="{= !!${b>/headers} &amp;&amp; ${b>/headers}.length > 0 }">
+            <Table items="{path: 'b>/headers', templateShareable: false}">
+              <columns>
+                <Column><Text text="Verwendung"/></Column>
+                <Column><Text text="Alternative"/></Column>
+                <Column><Text text="Werk"/></Column>
+                <Column><Text text="Stücklistennr."/></Column>
+                <Column hAlign="End"><Text text="Basismenge"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Gültig ab"/></Column>
+                <Column hAlign="End"><Text text="Positionen"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <Text text="{b>stlan} {b>usage}"/><Text text="{b>stlal}"/><Text text="{= ${b>werks} || 'werksübergreifend' }"/>
+                  <Text text="{b>stlnr}"/><Text text="{b>base}"/><Text text="{b>valid_from}"/><Text text="{b>items}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Strukturstückliste (mehrstufig)" titleUppercase="false"
+            visible="{= !!${b>/headers} &amp;&amp; ${b>/headers}.length > 0 }">
+            <t:TreeTable id="explosionTable" rows="{path: 'b>/explosion', parameters: {arrayNames: ['children']}}" selectionMode="None"
+              enableColumnReordering="false" noData="Keine Positionen für diese Auswahl">
+              <t:rowMode><trm:Fixed rowCount="{b>/explosionRows}"/></t:rowMode>
+              <t:columns>
+                <t:Column width="22rem"><Label text="Komponente"/>
+                  <t:template>
+                    <HBox alignItems="Center">
+                      <Link text="{b>matnr}" press=".onBomMaterialPress" visible="{= !!${b>matnr} }" class="sapUiTinyMarginEnd"/>
+                      <Text text="{b>text}" wrapping="false"/>
+                    </HBox>
+                  </t:template>
+                </t:Column>
+                <t:Column width="4rem"><Label text="Pos."/><t:template><Text text="{b>posnr}"/></t:template></t:Column>
+                <t:Column width="9rem"><Label text="Positionstyp"/><t:template><Text text="{b>postp} {b>postp_text}" wrapping="false"/></t:template></t:Column>
+                <t:Column width="6rem" hAlign="End"><Label text="Menge"/><t:template><Text text="{b>menge}"/></t:template></t:Column>
+                <t:Column width="4rem"><Label text="ME"/><t:template><Text text="{b>meins}"/></t:template></t:Column>
+                <t:Column width="17rem"><Label text="Stückliste (Verw. / Alt. / Werk)"/><t:template><Text text="{b>bom}" wrapping="false"/></t:template></t:Column>
+                <t:Column width="9rem"><Label text="Hinweis"/>
+                  <t:template>
+                    <HBox>
+                      <ObjectStatus text="Zyklus" state="Error" icon="sap-icon://synchronize" visible="{= !!${b>cycle} }" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus text="Stückliste" state="Information" icon="sap-icon://tree" visible="{= !!${b>is_bom} &amp;&amp; !${b>cycle} }"/>
+                      <ObjectStatus text="Löschvorm." state="Error" visible="{= !!${b>deleted} }"/>
+                    </HBox>
+                  </t:template>
+                </t:Column>
+              </t:columns>
+            </t:TreeTable>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Verwendungsnachweis (mehrstufig)" titleUppercase="false"
+            visible="{= ${m>/used_in} > 0 }">
+            <t:TreeTable id="where_usedTable" rows="{path: 'b>/where_used', parameters: {arrayNames: ['children']}}" selectionMode="None"
+              enableColumnReordering="false" noData="Keine Verwendung für diese Auswahl">
+              <t:rowMode><trm:Fixed rowCount="{b>/whereUsedRows}"/></t:rowMode>
+              <t:columns>
+                <t:Column width="22rem"><Label text="Verwendet in"/>
+                  <t:template>
+                    <HBox alignItems="Center">
+                      <Link text="{b>matnr}" press=".onBomMaterialPress" visible="{= !!${b>matnr} }" class="sapUiTinyMarginEnd"/>
+                      <Text text="{b>text}" wrapping="false"/>
+                    </HBox>
+                  </t:template>
+                </t:Column>
+                <t:Column width="4rem"><Label text="Pos."/><t:template><Text text="{b>posnr}"/></t:template></t:Column>
+                <t:Column width="9rem"><Label text="Positionstyp"/><t:template><Text text="{b>postp} {b>postp_text}" wrapping="false"/></t:template></t:Column>
+                <t:Column width="6rem" hAlign="End"><Label text="Menge"/><t:template><Text text="{b>menge}"/></t:template></t:Column>
+                <t:Column width="4rem"><Label text="ME"/><t:template><Text text="{b>meins}"/></t:template></t:Column>
+                <t:Column width="17rem"><Label text="Stückliste (Verw. / Alt. / Werk)"/><t:template><Text text="{b>bom}" wrapping="false"/></t:template></t:Column>
+                <t:Column width="9rem"><Label text="Hinweis"/>
+                  <t:template>
+                    <HBox>
+                      <ObjectStatus text="Zyklus" state="Error" icon="sap-icon://synchronize" visible="{= !!${b>cycle} }" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus text="Stückliste" state="Information" icon="sap-icon://tree" visible="{= !!${b>is_bom} &amp;&amp; !${b>cycle} }"/>
+                      <ObjectStatus text="Löschvorm." state="Error" visible="{= !!${b>deleted} }"/>
+                    </HBox>
+                  </t:template>
+                </t:Column>
+              </t:columns>
+            </t:TreeTable>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
       <uxap:ObjectPageSection id="duplicatesSection" title="Dubletten" titleUppercase="false">
         <uxap:subSections>
           <uxap:ObjectPageSubSection title="Dublettenprüfung" titleUppercase="false">
@@ -213,7 +348,7 @@
                     highlight="{= ${d>verdict/verdict} === 'Dublette' ? 'Error' : ${d>verdict/verdict} === 'Mögliche Dublette' ? 'Warning' : 'None' }">
                     <ObjectIdentifier title="{d>matnr}" text="{d>mtart} / {d>meins}"/>
                     <Text text="{d>text}"/>
-                    <HBox wrap="Wrap">
+                    <HBox wrap="Wrap" class="mdsaBadges">
                       <ObjectStatus text="{= ${d>shared}.join(', ') }" visible="{= ${d>shared}.length > 0 }" state="Error"
                         inverted="true" icon="sap-icon://chain-link" class="sapUiTinyMarginEnd"/>
                       <ObjectStatus visible="{= ${d>semantic} !== null }" text="{= 'Semantisch ' + Math.round(${d>semantic} * 100) + ' %' }"

@@ -9,6 +9,7 @@ from functools import lru_cache
 from .config import EMBED_LANGUAGES, FALLBACK_LANGUAGES, INPUT_DIR, LANGUAGE
 
 TABLES = ["MARA", "MAKT", "MARM", "MECL", "MEME", "MTXT", "EINA"]
+BOM_TABLES = ["STKO", "STPO"]   # bill of material header / items, keyed by the header material (optional files)
 
 # long text IDs -> label in the embedded document
 TEXT_IDS = {"GRUN": "Grunddatentext", "BEST": "Bestelltext", "IVER": "Interner Vermerk", "0001": "Vertriebstext"}
@@ -31,7 +32,9 @@ def table_file(table: str):
     return files[-1]   # newest extract
 
 
-def read_table(table: str) -> list[dict]:
+def read_table(table: str, optional: bool = False) -> list[dict]:
+    if optional and not any(INPUT_DIR.glob(f"*_{table}.txt")):
+        return []
     with open(table_file(table), encoding="utf-8", newline="") as fh:
         rows = csv.DictReader(fh, delimiter=";", quoting=csv.QUOTE_NONE)
         return [{k: (v or "").strip() for k, v in row.items() if k} for row in rows]
@@ -58,6 +61,10 @@ class Material:
     meme: list[dict] = field(default_factory=list)
     mtxt: list[dict] = field(default_factory=list)
     eina: list[dict] = field(default_factory=list)
+    stko: list[dict] = field(default_factory=list)     # BOMs of this material (as header)
+    stpo: list[dict] = field(default_factory=list)     # items of these BOMs
+    bom_components: list[str] = field(default_factory=list)   # short texts of the direct components
+    bom_parents: list[str] = field(default_factory=list)      # short texts of the BOM headers using this material
 
     @property
     def id(self) -> str:
@@ -112,8 +119,8 @@ class Material:
             result.append((r["ATNAM_BEZEI"] or r["ATNAM"], value))
         return result
 
-    def document(self) -> str:
-        """Text that is embedded for the semantic search."""
+    def document(self, bom: bool = True) -> str:
+        """Text that is embedded for the semantic search (with the names of BOM components / parent BOMs)."""
         parts = [self.short_text]
         for lang in EMBED_LANGUAGES:
             text = self.texts.get(lang)
@@ -126,12 +133,17 @@ class Material:
             lines.append("Klasse: " + ", ".join(self.classes))
         if feats := self.features():
             lines.append("Merkmale: " + "; ".join(f"{n}: {v}" for n, v in feats))
+        if bom and self.bom_components:
+            lines.append("Stückliste aus: " + "; ".join(self.bom_components[:25]))
+        if bom and self.bom_parents:
+            lines.append("Verwendet in Stückliste: " + "; ".join(self.bom_parents[:15]))
         return "\n".join(lines)[:6000]
 
     def search_text(self) -> str:
-        """Text for the lexical / fuzzy search: everything a user may type, incl. numbers and codes."""
+        """Text for the lexical / fuzzy search: everything a user may type, incl. numbers and codes. Without the BOM
+        context, otherwise every assembly would match the words of its components."""
         return " ".join([
-            self.document(), *self.texts.values(), self.id, *self.eans, *self.vendor_parts,
+            self.document(bom=False), *self.texts.values(), self.id, *self.eans, *self.vendor_parts,
             self.mara.get("BISMT", ""), self.mara.get("MATKL", ""), self.mara.get("MTART", ""),
         ])
 
@@ -152,12 +164,14 @@ class Material:
             "classes": self.classes,
             "status": m.get("MSTAE", ""),
             "deleted": self.deleted,
+            "bom": bool(self.stko),
+            "used_in": len(self.bom_parents),
         }
 
     def tables(self) -> dict[str, list[dict]]:
         """All rows of the material per SAP table, unchanged as in the extract."""
         return {"MARA": [self.mara], "MAKT": self.makt, "MARM": self.marm, "MECL": self.mecl, "MEME": self.meme,
-                "MTXT": self.mtxt, "EINA": self.eina}
+                "MTXT": self.mtxt, "EINA": self.eina, "STKO": self.stko, "STPO": self.stpo}
 
     def detail(self) -> dict:
         return {
@@ -176,9 +190,9 @@ class Material:
 @lru_cache(maxsize=1)
 def load_materials() -> dict[str, Material]:
     """All materials keyed by display material number (without leading zeros)."""
-    rows = {t: read_table(t) for t in TABLES}
+    rows = {t: read_table(t) for t in TABLES} | {t: read_table(t, optional=True) for t in BOM_TABLES}
     by_matnr: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
-    for table in TABLES[1:]:
+    for table in TABLES[1:] + BOM_TABLES:
         for r in rows[table]:
             if r.get("XDELE") != "X":
                 by_matnr[r["MATNR"]][table].append(r)
@@ -193,6 +207,17 @@ def load_materials() -> dict[str, Material]:
         material = Material(matnr=mara["MATNR"], mara=mara, texts=texts, makt=sub.get("MAKT", []),
                             marm=sub.get("MARM", []),
                             mecl=sub.get("MECL", []), meme=sub.get("MEME", []), mtxt=sub.get("MTXT", []),
-                            eina=sub.get("EINA", []))
+                            eina=sub.get("EINA", []), stko=sub.get("STKO", []), stpo=sub.get("STPO", []))
         materials[material.id] = material
+
+    # direct BOM relations for the search documents (the full graph is in bom.py)
+    for header in materials.values():
+        for item in header.stpo:
+            component = materials.get(strip_matnr(item.get("IDNRK", "")))
+            if component is None or component is header:
+                continue
+            if component.short_text not in header.bom_components:
+                header.bom_components.append(component.short_text)
+            if header.short_text not in component.bom_parents:
+                component.bom_parents.append(header.short_text)
     return materials
