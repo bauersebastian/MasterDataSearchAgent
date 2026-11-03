@@ -116,6 +116,5 @@ to use api.openai.com instead.
 
 ## Notes
 
-- "Fiori elements" proper (`sap.fe` templates) needs an OData V4 service with annotations; this app uses freestyle
-  SAPUI5 with the same floorplans (dynamic page / object page) and theme, like the research agent.
-- The app has **no user authentication**; anyone who can reach it can post to SAP with the server's credentials. Bind it to `127.0.0.1` or put it behind a reverse proxy with auth/SSO.
+The app currently has **no user authentication**: anyone who can reach it can post to SAP with the server's
+credentials. Bind it to `127.0.0.1` or put it behind a reverse proxy with auth/SSO.
