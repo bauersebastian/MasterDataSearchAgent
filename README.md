@@ -13,7 +13,7 @@ visualization, an AI duplicate check and posting a material to SAP.
 ## Setup
 
 ```bash
-git clone git@github.com:bauersebastian/MasterDataSearchAgent.git && cd MasterDataSearchAgent
+git clone ssh://git@code.fis-gmbh.de:2222/fis-gruppe/intern/ai-solutions/ai-apps/ai-services/mpm-master_data_search.git && cd mpm-master_data_search
 uv venv && uv pip install -r requirements.txt
 cp .env.example .env              # fill in OPENAI_API_KEY, SAP_USER, SAP_PASSWORD (and deployment names if they differ)
 .venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials, ~300k tokens, a few minutes)
