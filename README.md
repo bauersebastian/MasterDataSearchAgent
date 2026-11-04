@@ -102,14 +102,34 @@ Cycles (a BOM containing the material itself, as FG126 in the extract) are detec
 Search hits show the badges *Stückliste* and *in n Stücklisten*. After adding or changing BOM files, run the indexer
 again – it only re-embeds the materials whose BOM context changed.
 
-## Duplicate check
+## Duplicate check for materials
 
-On the object page (section *Dubletten*): candidates from semantic neighbours of the material's own embedding,
+On the material object page (section *Dubletten*): candidates from semantic neighbours of the material's own embedding,
 fuzzy name similarity (rapidfuzz token set ratio), BM25 with the short text as query, and identical keys (EAN,
 vendor part number), fused with RRF. *KI-Bewertung* sends the reference material and the candidates (texts, units,
 weights, dimensions, EANs, vendors, classification) to `gpt-5.6-luna`, which classifies each candidate as
 *Dublette*, *Mögliche Dublette*, *Variante* (same family, different size/thread/colour …) or *Verschieden* with a
 reason.
+
+## Duplicate check for business partners
+
+On the partner object page (section *Dubletten*), candidates from:
+
+- semantic neighbours of the partner's own embedding, BM25 with name and city as query
+- fuzzy name similarity **without the legal form** (*Müller GmbH & Co.KG* = *Müller KG*, rapidfuzz token set ratio)
+- the **same address** (country, postcode, street and house number; *Str.* = *Straße*)
+- **shared keys**: tax number / VAT ID, IBAN, identification number, external partner number (strong), e-mail,
+  phone, fax, website of the own addresses (weaker: test data shares info@ addresses)
+- **customer ↔ vendor cross references** (KNA1-LIFNR / LFA1-KUNNR pointing to another partner: in S/4HANA one
+  partner should carry both roles); for persons the same name with the same birth date
+
+fused with RRF. The similarity shown is the name or semantic similarity, at least 95 % for a strong shared key and
+90 % for the same name at the same address; the same name in another city (branches) is lowered and flagged
+*anderer Ort*. Badges: shared keys, *anderer Partnertyp*, *steht in Beziehung* (e.g. own contact person).
+*KI-Bewertung* sends the reference partner and the candidates (names, roles, addresses, communication, customer /
+vendor data, tax numbers, bank accounts, relations, materials supplied) to the LLM, which classifies each candidate
+as *Dublette*, *Mögliche Dublette*, *Verwandt* (branch / site, company of the same group, contact person) or
+*Verschieden* with a reason.
 
 ## Send to SAP
 
@@ -153,6 +173,8 @@ to use api.openai.com instead.
 | GET | `/api/partners/suggest?q=` | – | up to 8 suggestions |
 | GET | `/api/partners/tables` | – | GPA table descriptions (objects.md) |
 | GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
+| GET | `/api/partners/{partner}/duplicates` | – | duplicate candidates with signals |
+| POST | `/api/partners/{partner}/duplicates/assess` | `{candidates: [partner]}` (optional) | LLM verdicts |
 
 ## Notes
 

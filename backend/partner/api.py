@@ -1,13 +1,13 @@
 """REST API of the business partner search (/api/partners/...)."""
 import os
-from typing import Literal
+from typing import Literal, Optional
 
 import openai
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..errors import openai_error
-from . import ai_search, search
+from . import ai_search, duplicates, search
 from .data import load_partners, table_labels
 
 router = APIRouter(prefix="/api/partners")
@@ -22,6 +22,10 @@ class SearchRequest(BaseModel):
     group: list[str] = []
     include_deleted: bool = False
     limit: int = 50
+
+
+class AssessRequest(BaseModel):
+    candidates: Optional[list[str]] = None
 
 
 @router.post("/search")
@@ -58,3 +62,25 @@ def get_partner(partner: str) -> dict:
     if p is None:
         raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden")
     return p.detail()
+
+
+@router.get("/{partner}/duplicates")
+def get_duplicates(partner: str) -> dict:
+    try:
+        return duplicates.candidates(partner.lstrip("0") or partner)
+    except KeyError as e:
+        raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden") from e
+    except openai.OpenAIError as e:
+        raise openai_error(e) from e
+
+
+@router.post("/{partner}/duplicates/assess")
+def assess_duplicates(partner: str, req: AssessRequest) -> dict:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(500, "OPENAI_API_KEY ist nicht konfiguriert - keine KI-Bewertung möglich")
+    try:
+        return duplicates.assess(partner.lstrip("0") or partner, req.candidates)
+    except KeyError as e:
+        raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden") from e
+    except openai.OpenAIError as e:
+        raise openai_error(e) from e

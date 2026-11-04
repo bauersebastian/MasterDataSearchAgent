@@ -3,6 +3,7 @@ sap.ui.define([
   "sap/ui/core/routing/History",
   "sap/ui/model/json/JSONModel",
   "sap/m/MessageBox",
+  "sap/m/MessageToast",
   "sap/m/Label",
   "sap/m/Text",
   "sap/m/Panel",
@@ -11,7 +12,7 @@ sap.ui.define([
   "sap/m/ColumnListItem",
   "sap/m/ScrollContainer",
   "fis/mdsa/controller/api"
-], (Controller, History, JSONModel, MessageBox, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, api) => {
+], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, api) => {
   "use strict";
 
   // German labels of the G000 fields (the rest is shown with its technical name)
@@ -34,6 +35,7 @@ sap.ui.define([
   return Controller.extend("fis.mdsa.controller.partner.Partner", {
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "p");
+      this.getView().setModel(new JSONModel({ candidates: null, busy: false }), "d");
       this.getOwnerComponent().getRouter().getRoute("partner").attachPatternMatched(this.onRouteMatched, this);
       api("api/partners/tables").then((labels) => { this.tableLabels = labels; }).catch(() => { this.tableLabels = {}; });
     },
@@ -42,6 +44,7 @@ sap.ui.define([
       const partner = event.getParameter("arguments").partner;
       const p = this.getView().getModel("p");
       p.setData({ partner, busy: true });
+      this.getView().getModel("d").setData({ candidates: null, busy: true, assessment: null });
       this.byId("page").setSelectedSection(null);
       this.partner = partner;
       try {
@@ -55,7 +58,52 @@ sap.ui.define([
       } catch (e) {
         p.setProperty("/busy", false);
         MessageBox.error(`Geschäftspartner ${partner} konnte nicht geladen werden: ${e.message}`);
+        return;
       }
+      this.loadCandidates(partner);
+    },
+
+    // --- duplicate check ---
+    async loadCandidates(partner) {
+      const d = this.getView().getModel("d");
+      try {
+        const result = await api(`api/partners/${encodeURIComponent(partner)}/duplicates`);
+        if (partner === this.partner) {
+          d.setData({ ...result, busy: false, assessment: null });
+        }
+      } catch (e) {
+        d.setProperty("/busy", false);
+        MessageToast.show(`Dublettenkandidaten konnten nicht ermittelt werden: ${e.message}`);
+      }
+    },
+
+    async onAssess() {
+      const d = this.getView().getModel("d");
+      const partner = this.partner;
+      const candidates = d.getProperty("/candidates").map((c) => c.partner);
+      d.setProperty("/busy", true);
+      try {
+        const assessment = await api(`api/partners/${encodeURIComponent(partner)}/duplicates/assess`, { candidates });
+        if (partner !== this.partner) {
+          return;
+        }
+        const verdicts = Object.fromEntries(assessment.verdicts.map((v) => [v.partner, v]));
+        d.setProperty("/candidates", d.getProperty("/candidates").map((c) => ({ ...c, verdict: verdicts[c.partner] || null })));
+        d.setProperty("/assessment", assessment);
+        d.setProperty("/duplicateFound", assessment.verdicts.some((v) => v.verdict === "Dublette" || v.verdict === "Mögliche Dublette"));
+      } catch (e) {
+        MessageBox.error(`KI-Bewertung fehlgeschlagen: ${e.message}`);
+      } finally {
+        d.setProperty("/busy", false);
+      }
+    },
+
+    onScrollToDuplicates() {
+      this.byId("page").scrollToSection(this.byId("duplicatesSection").getId());
+    },
+
+    onCandidatePress(event) {
+      this.openPartner(event.getSource().getBindingContext("d").getProperty("partner"));
     },
 
     // --- formatters ---

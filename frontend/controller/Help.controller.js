@@ -113,6 +113,18 @@ sap.ui.define([
         <p>Die Detailseite zeigt Adressen mit Kommunikationsdaten, den Beziehungsgraphen mit den Ansprechpartnern
         (Klick öffnet den Partner), die gelieferten Materialien (Klick öffnet das Material) und alle Tabellen des
         Extrakts unverändert.</p>`
+    },
+    {
+      title: "Dublettenprüfung für Geschäftspartner",
+      html: `<p>Kandidaten aus semantischer Nähe, Namensähnlichkeit <strong>ohne Rechtsform</strong> (<em>GmbH &amp; Co.KG</em>
+        = <em>KG</em>), <strong>gleicher Adresse</strong> und <strong>gemeinsamen Schlüsseln</strong>: Steuernummer / USt-ID,
+        IBAN, Identifikationsnummer (stark), E-Mail, Telefon, Fax, Webseite (schwächer). Verweist der Kunde auf die
+        Lieferantennummer eines anderen Partners (oder umgekehrt), ist das ein starkes Indiz – in S/4HANA sollte ein
+        Partner beide Rollen tragen. Gleicher Name an einem <em>anderen Ort</em> ist meist eine Niederlassung und wird
+        niedriger bewertet.</p>
+        <p><em>KI-Bewertung</em> lässt das LLM jeden Kandidaten als <strong>Dublette</strong>, <strong>mögliche
+        Dublette</strong>, <strong>verwandt</strong> (Niederlassung, Konzerngesellschaft, Ansprechpartner) oder
+        <strong>verschieden</strong> einstufen – mit Begründung.</p>`
     }
   ];
 
