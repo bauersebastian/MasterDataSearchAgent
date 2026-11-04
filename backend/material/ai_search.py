@@ -6,8 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from . import search, vectordb
-from .config import MODEL, REASONING_EFFORT
+from .. import llm, vectordb
+from ..config import MATERIAL_COLLECTION, MODEL
+from . import search
 from .data import load_materials
 from .duplicates import compact
 
@@ -69,21 +70,9 @@ Rules:
 """
 
 
-def llm_parse(system: str, user: str, schema):
-    response = vectordb.client().responses.parse(
-        model=MODEL,
-        reasoning={"effort": REASONING_EFFORT},
-        input=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        text_format=schema,
-    )
-    if response.output_parsed is None:
-        raise RuntimeError(f"Das LLM hat kein strukturiertes Ergebnis geliefert: {response.output_text!r}")
-    return response.output_parsed
-
-
 def retrieve(query: str, interpretation: Interpretation, filters: dict) -> list[dict]:
     """Hybrid search with the extracted keywords, completed by the semantic hits of the whole request."""
-    semantic = vectordb.indexed_count() > 0
+    semantic = vectordb.indexed_count(MATERIAL_COLLECTION) > 0
     hits = search.search(interpretation.search_terms, "hybrid" if semantic else "lexical", filters, CANDIDATES)["hits"]
     if semantic and len(hits) < CANDIDATES:
         seen = {h["matnr"] for h in hits}
@@ -93,13 +82,13 @@ def retrieve(query: str, interpretation: Interpretation, filters: dict) -> list[
 
 
 def ai_search(query: str, filters: dict) -> dict:
-    interpretation = llm_parse(INTERPRET_PROMPT, query, Interpretation)
+    interpretation = llm.parse(INTERPRET_PROMPT, query, Interpretation)
     candidates = retrieve(query, interpretation, filters)
     result = {
         "query": query, "mode": "ai", "hits": [], "total": 0, "did_you_mean": None, "expansions": [], "warnings": [],
         "interpretation": interpretation.model_dump(), "candidates_checked": len(candidates), "model": MODEL,
     }
-    if not vectordb.indexed_count():
+    if not vectordb.indexed_count(MATERIAL_COLLECTION):
         result["warnings"].append("Der Vektorindex ist leer - Kandidaten nur aus der unscharfen Textsuche")
     if not candidates:
         result["summary"] = "Zu dieser Anfrage wurden keine Kandidaten im Materialstamm gefunden."
@@ -109,7 +98,7 @@ def ai_search(query: str, filters: dict) -> dict:
     user = (f"Request: {query}\n\nSearched product: {interpretation.product}\nRequirements:\n"
             + "\n".join(f"- {r.text}" for r in interpretation.requirements) + "\n\nCandidates:\n"
             + "\n".join(json.dumps(compact(materials[h["matnr"]]), ensure_ascii=False) for h in candidates))
-    assessment = llm_parse(ASSESS_PROMPT, user, Assessment)
+    assessment = llm.parse(ASSESS_PROMPT, user, Assessment)
 
     by_id = {h["matnr"]: h for h in candidates}
     hits = []

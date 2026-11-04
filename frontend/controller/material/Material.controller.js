@@ -40,7 +40,7 @@ sap.ui.define([
   const countNodes = (nodes) => nodes.reduce((n, node) => n + 1 + countNodes(node.children || []), 0);
   const rowCount = (nodes) => Math.min(Math.max(countNodes(nodes), 1), 15);
 
-  return Controller.extend("fis.mdsa.controller.Material", {
+  return Controller.extend("fis.mdsa.controller.material.Material", {
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "m");
       this.getView().setModel(new JSONModel({ candidates: null, busy: false }), "d");
@@ -169,7 +169,7 @@ sap.ui.define([
       const s = this.getView().getModel("s");
       s.setData({ matnr: this.matnr, busy: true, tab: "xml", postResult: null });
       if (!this.sapDialog) {
-        this.sapDialog = await Fragment.load({ id: this.getView().getId(), name: "fis.mdsa.view.SapDialog", controller: this });
+        this.sapDialog = await Fragment.load({ id: this.getView().getId(), name: "fis.mdsa.view.material.SapDialog", controller: this });
         this.getView().addDependent(this.sapDialog);
       }
       this.sapDialog.open();
@@ -233,6 +233,11 @@ sap.ui.define([
 
     onScrollToDuplicates() {
       this.byId("page").scrollToSection(this.byId("duplicatesSection").getId());
+    },
+
+    onVendorPress(event) {
+      const partner = event.getSource().getBindingContext("m").getProperty("partner");
+      this.getOwnerComponent().getRouter().navTo("partner", { partner });
     },
 
     onCandidatePress(event) {

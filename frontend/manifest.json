@@ -27,11 +27,15 @@
       "routes": [
         { "name": "search", "pattern": ":?query:", "target": "search" },
         { "name": "material", "pattern": "material/{matnr}", "target": "material" },
+        { "name": "partnerSearch", "pattern": "partner:?query:", "target": "partnerSearch" },
+        { "name": "partner", "pattern": "partner/{partner}", "target": "partner" },
         { "name": "help", "pattern": "hilfe", "target": "help" }
       ],
       "targets": {
-        "search": { "id": "search", "name": "Search", "level": 1 },
-        "material": { "id": "material", "name": "Material", "level": 2 },
+        "search": { "id": "search", "name": "material.Search", "level": 1 },
+        "material": { "id": "material", "name": "material.Material", "level": 2 },
+        "partnerSearch": { "id": "partnerSearch", "name": "partner.Search", "level": 1 },
+        "partner": { "id": "partner", "name": "partner.Partner", "level": 2 },
         "help": { "id": "help", "name": "Help", "level": 2 }
       }
     },

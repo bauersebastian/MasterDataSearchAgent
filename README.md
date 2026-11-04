@@ -1,14 +1,24 @@
 # Master Data Search Agent
 
-Google-like search over the SAP material master extract in `input/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA –
-14,372 materials – plus the bills of material STKO / STPO), with an SAP Fiori (Horizon) UI, BOM relationship
-visualization, an AI duplicate check and posting a material to SAP.
+Google-like search over two SAP master data objects, with an SAP Fiori (Horizon) UI:
 
-- **backend/** – FastAPI service: loads the input files, hybrid search, duplicate check; serves the frontend.
-- **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): search page
-  (List Report style) and material object page (`sap.uxap.ObjectPageLayout`).
-- **data/chroma/** – the Chroma vector DB with the embeddings of all materials. It is not part of the repository:
-  build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
+- **Material master** – extract in `input/MAT/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA – 14,372 materials – plus
+  the bills of material STKO / STPO): BOM relationship visualization, AI duplicate check, posting a material to SAP.
+- **Business partners** – GPA extract in `input/GPA/` (G000 general data, G100 roles, GADC/GAD2/GAD3/GAD6/GADU
+  addresses and communication, G050/GRAC/GRA2/GRA3/GRA6 relationships and contact persons, GKA1/GKVP customer and
+  GLA1/GLT3 vendor data, G0BK bank details, GTAX tax numbers, G0ID identification numbers – 1,868 partners; table
+  descriptions in `input/GPA/objects.md`).
+
+The switch *Material | Geschäftspartner* above the search field changes the object; each search keeps its own query.
+
+- **backend/** – FastAPI service. Shared engine: `textsearch.py` (exact keys, BM25 with fuzzy expansion, RRF),
+  `vectordb.py` (Chroma, one collection per object), `tables.py` (extract files), `llm.py`, `indexer.py`.
+  One package per object with its data model, search, AI search and API router: `backend/material/`,
+  `backend/partner/`.
+- **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): `view/material/` and
+  `view/partner/` (search page in List Report style, object page `sap.uxap.ObjectPageLayout`), likewise `controller/`.
+- **data/chroma/** – the Chroma vector DB with the collections `materials` and `partners`. It is not part of the
+  repository: build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
 
 ## Setup
 
@@ -16,20 +26,22 @@ visualization, an AI duplicate check and posting a material to SAP.
 git clone ssh://git@code.fis-gmbh.de:2222/fis-gruppe/intern/ai-solutions/ai-apps/ai-services/mpm-master_data_search.git && cd mpm-master_data_search
 uv venv && uv pip install -r requirements.txt
 cp .env.example .env              # fill in OPENAI_API_KEY, SAP_USER, SAP_PASSWORD (and deployment names if they differ)
-.venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials, ~300k tokens, a few minutes)
+.venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials + ~1.9k partners, a few minutes)
 .venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open http://127.0.0.1:8000.
 
-The indexer is resumable: it stores a content hash per material and only embeds new or changed materials, so an
-interrupted run can simply be started again. `--rebuild` deletes the DB and embeds everything (needed after
-changing the embedding model or `MDSA_EMBEDDING_DIMENSIONS`). With a new extract in `input/` (same file naming
-`*_<TABLE>.txt`, the newest file per table wins), run the indexer again.
+The indexer is resumable: it stores a content hash per object and only embeds new or changed ones, so an
+interrupted run can simply be started again. `python -m backend.indexer partner` (or `material`) indexes one object
+only; `--rebuild` deletes the collection(s) and embeds everything (needed after changing the embedding model or
+`MDSA_EMBEDDING_DIMENSIONS`). With a new extract in `input/MAT/` or `input/GPA/` (same file naming `*_<TABLE>.txt`,
+the newest file per table wins), run the indexer again. Folders: `MDSA_MATERIAL_INPUT_DIR`, `MDSA_PARTNER_INPUT_DIR`
+(material files directly in `input/`, as in older setups, are still found).
 
 Without `OPENAI_API_KEY` or without a built index the app still works with the fuzzy text search only and says so.
 
-## Search
+## Material search
 
 One search document per material: short texts (D/E/F/N), long texts (basic data, purchase order, sales, internal
 note), class names, readable feature values and the BOM context: the names of the direct components
@@ -47,6 +59,30 @@ for the fuzzy text search, otherwise every assembly would match the words of its
 
 Every hit shows which retriever found it and with which score; the *?* button explains how the query words were
 expanded. Filters: material type, material group, vendor, include materials flagged for deletion.
+
+## Business partner search
+
+One search document per partner: name (organisation names 1-4, first and last name of a person, group names),
+search terms, partner type and roles (Kunde, Lieferant, Kontaktperson …), the addresses with country, e-mail and web
+addresses, customer / vendor number with account group, blocks – plus the context: the **contact persons** of an
+organisation with function and department (or, for a person, the organisations it is the contact of, BUR001), other
+relationships and, for vendors, the **materials supplied** from the purchasing info records EINA of the material
+extract (an evenly spread sample of the short texts) – so *Lieferant für Kabelverschraubungen* finds the vendors
+of cable glands. As for the BOM context, contact names and materials are not used for the fuzzy text search.
+
+| Mode | How |
+|---|---|
+| **Exakt** (always) | partner number (with or without leading zeros), customer / vendor number, external partner number, tax number (USt-ID), IBAN, identification number, e-mail, phone, fax, website; for a contact person also the business e-mail / phone of the relationship |
+| **Unscharf**, **Semantisch**, **Hybrid** | same engine as for materials (`backend/textsearch.py`), collection `partners` |
+| **KI-Suche** | e.g. *Lieferant für Akkuschrauber in Unterfranken mit E-Mail-Adresse*: the LLM extracts the searched partner, keywords and requirements; 30 hybrid candidates are checked against each requirement using only their master data (roles, addresses – a region may be derived from postcode and city –, communication, contacts, customer / vendor data, bank details, materials supplied) |
+
+Filters: partner type (Organisation / Person / Gruppe), role, country of the standard address, grouping (BU_GROUP),
+include partners flagged for deletion (archiving flag XDELE or LOEVM of customer / vendor).
+
+The object page shows general data and roles, the addresses with their communication data, the **relationship
+graph** (organisation → contact persons, other relationships; click opens the partner) with the contact data from
+G050/GRAC/GRA2/GRA3/GRA6, the **materials supplied** (click opens the material; conversely the vendor in the
+material's purchasing info records opens the partner), all tables of the extract unchanged and the search document.
 
 ## Bills of material
 
@@ -104,7 +140,7 @@ to use api.openai.com instead.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| GET | `/api/config` | – | counts, models, whether the key is configured, filter values |
+| GET | `/api/config` | – | counts, models, whether the key is configured, filter values (partner: under `partner`) |
 | POST | `/api/search` | `{query, mode: hybrid\|semantic\|lexical, mtart[], matkl[], vendor[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `text_html`; `did_you_mean`, `expansions` |
 | GET | `/api/suggest?q=` | – | up to 8 suggestions (fuzzy text search only, no embedding call) |
 | GET | `/api/materials/{matnr}` | – | all data of a material |
@@ -113,6 +149,10 @@ to use api.openai.com instead.
 | POST | `/api/materials/{matnr}/duplicates/assess` | `{candidates: [matnr]}` (optional) | LLM verdicts |
 | GET | `/api/materials/{matnr}/xml` | – | SOAP message of the material, tables, endpoint |
 | POST | `/api/sap/post` | `{xml}` | `{ok, status_code, reason, fault, body}` |
+| POST | `/api/partners/search` | `{query, mode: hybrid\|semantic\|lexical\|ai, type[], role[], country[], group[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `name_html`, `address_html` |
+| GET | `/api/partners/suggest?q=` | – | up to 8 suggestions |
+| GET | `/api/partners/tables` | – | GPA table descriptions (objects.md) |
+| GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
 
 ## Notes
 

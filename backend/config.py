@@ -8,8 +8,14 @@ APP_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(APP_DIR / ".env")
 
 # --- Input data -----------------------------------------------------------
-# SAP material master extract: one ';' separated file per table (MAT_<timestamp>_<nr>_<TABLE>.txt)
+# One folder per master data object, one ';' separated file per table (<OBJ>_<timestamp>_<nr>_<TABLE>.txt)
 INPUT_DIR = Path(os.getenv("MDSA_INPUT_DIR", APP_DIR / "input"))
+# material master (MARA, MAKT, ...); older setups kept the files directly in input/
+MATERIAL_INPUT_DIR = Path(os.getenv("MDSA_MATERIAL_INPUT_DIR", INPUT_DIR / "MAT"))
+if not MATERIAL_INPUT_DIR.is_dir() and any(INPUT_DIR.glob("*_MARA.txt")):
+    MATERIAL_INPUT_DIR = INPUT_DIR
+# business partners (GPA extract: G000, G100, GADC, G050, GKA1, GLA1, ...)
+PARTNER_INPUT_DIR = Path(os.getenv("MDSA_PARTNER_INPUT_DIR", INPUT_DIR / "GPA"))
 
 # --- OpenAI ---------------------------------------------------------------
 # Azure OpenAI resource (v1 API, used with the standard OpenAI client); the key is OPENAI_API_KEY.
@@ -25,10 +31,11 @@ REASONING_EFFORT = os.getenv("MDSA_REASONING_EFFORT", "low")
 # --- Vector DB ------------------------------------------------------------
 # Bundled with the app (demo): built once with `python -m backend.indexer`
 CHROMA_DIR = Path(os.getenv("MDSA_CHROMA_DIR", APP_DIR / "data" / "chroma"))
-COLLECTION = "materials"
+MATERIAL_COLLECTION = "materials"
+PARTNER_COLLECTION = "partners"
 
 # --- Search ---------------------------------------------------------------
-LANGUAGE = os.getenv("MDSA_LANGUAGE", "D")          # SAP language key of the displayed short text
+LANGUAGE = os.getenv("MDSA_LANGUAGE", "D")          # SAP language key of the displayed (material) short text
 FALLBACK_LANGUAGES = ["D", "E", "F", "N"]           # if the material has no text in LANGUAGE
 EMBED_LANGUAGES = ["D", "E", "F", "N"]              # short texts that go into the embedded document
 CANDIDATES = 200          # hits per retriever before fusion

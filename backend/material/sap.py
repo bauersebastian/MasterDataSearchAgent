@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-from .config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SAP_LOGON_LANGUAGE, SEPARATOR,
+from ..config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SAP_LOGON_LANGUAGE, SEPARATOR,
                      SOAP_ACTION, VARIANT, VIA_JOB)
 from .data import Material
 

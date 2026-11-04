@@ -1,0 +1,198 @@
+<mvc:View controllerName="fis.mdsa.controller.partner.Search"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:f="sap.f" xmlns:core="sap.ui.core" height="100%">
+  <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" headerPinned="true" fitContent="false">
+    <f:title>
+      <f:DynamicPageTitle>
+        <f:heading>
+          <HBox alignItems="Center">
+            <Image src="https://www.fis-gmbh.de/wp-content/uploads/de/img-logos/logos-fis/logo_fis_2022_blau.svg"
+              alt="FIS" height="2rem" class="sapUiSmallMarginEnd"/>
+            <Title text="{i18n>partnerTitle}" wrapping="true"/>
+          </HBox>
+        </f:heading>
+        <f:snappedContent>
+          <Text text="{bp>/query}"/>
+        </f:snappedContent>
+        <f:actions>
+          <Button text="Zurücksetzen" icon="sap-icon://reset" type="Transparent" press=".onReset"/>
+          <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+        </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
+
+    <f:header>
+      <f:DynamicPageHeader pinnable="false">
+        <VBox class="mdsaSearchBox">
+          <FlexBox justifyContent="Center" class="sapUiSmallMarginBottom">
+            <SegmentedButton id="objectSwitch" selectedKey="partner" selectionChange=".onObjectSwitch" width="22rem">
+              <items>
+                <SegmentedButtonItem key="material" text="Material" icon="sap-icon://product"/>
+                <SegmentedButtonItem key="partner" text="Geschäftspartner" icon="sap-icon://customer"/>
+              </items>
+            </SegmentedButton>
+          </FlexBox>
+          <SearchField id="searchField" value="{bp>/query}" width="100%" enableSuggestions="true" maxLength="200"
+            placeholder="Geschäftspartner suchen - Name, Ort, Partner-/Kunden-/Lieferantennr., USt-ID, IBAN, E-Mail, Telefon oder in eigenen Worten"
+            search=".onSearch" suggest=".onSuggest" suggestionItems="{path: 'suggest>/items', templateShareable: false}">
+            <SuggestionItem key="{suggest>partner}" text="{suggest>text}" description="{suggest>description}"/>
+          </SearchField>
+
+          <FlexBox wrap="Wrap" alignItems="Center" justifyContent="Center" class="sapUiSmallMarginTop">
+            <SegmentedButton selectedKey="{bp>/mode}" selectionChange=".onModeChange" width="31rem" class="sapUiSmallMarginEnd">
+              <items>
+                <SegmentedButtonItem key="hybrid" text="Hybrid" icon="sap-icon://combine"
+                  tooltip="Semantische Suche und unscharfe Textsuche, per Reciprocal Rank Fusion kombiniert"/>
+                <SegmentedButtonItem key="semantic" text="Semantisch" icon="sap-icon://learning-assistant"
+                  tooltip="Bedeutungssuche über Embeddings ({/config/embedding_model}) in Chroma"/>
+                <SegmentedButtonItem key="lexical" text="Unscharf" icon="sap-icon://text"
+                  tooltip="Probabilistische Textsuche: BM25 mit Tippfehler-, Präfix- und Wortteil-Toleranz"/>
+                <SegmentedButtonItem key="ai" text="KI-Suche" icon="sap-icon://ai" enabled="{= !!${/config/openai_configured} }"
+                  tooltip="Anfrage in eigenen Worten: das LLM erkennt den gesuchten Partner und die Anforderungen und prüft die Treffer anhand der Stammdaten"/>
+              </items>
+            </SegmentedButton>
+            <MultiComboBox selectedKeys="{bp>/type}" items="{path: '/config/partner/facets/type', templateShareable: false}"
+              placeholder="Partnertyp" width="10rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{text}" additionalText="{count}"/>
+            </MultiComboBox>
+            <MultiComboBox selectedKeys="{bp>/role}" items="{path: '/config/partner/facets/role', templateShareable: false}"
+              placeholder="Rolle" width="10rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{text}" additionalText="{count}"/>
+            </MultiComboBox>
+            <MultiComboBox selectedKeys="{bp>/country}" items="{path: '/config/partner/facets/country', templateShareable: false}"
+              placeholder="Land" width="10rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{text}" additionalText="{count}"/>
+            </MultiComboBox>
+            <MultiComboBox selectedKeys="{bp>/group}" items="{path: '/config/partner/facets/group', templateShareable: false}"
+              placeholder="Gruppierung" width="10rem" selectionFinish=".onFilterChange" class="sapUiTinyMarginEnd">
+              <core:ListItem key="{key}" text="{text}" additionalText="{count}"/>
+            </MultiComboBox>
+            <CheckBox text="Gelöschte einbeziehen" selected="{bp>/includeDeleted}" select=".onFilterChange"/>
+          </FlexBox>
+
+          <Text class="mdsaStatus sapUiTinyMarginTop" textAlign="Center" width="100%" visible="{/config/loaded}"
+            text="{= ${/config/partner/partners} ? (${/config/partner/partners} + ' Geschäftspartner · ' + ${/config/partner/indexed} + ' im Vektorindex (' + ${/config/embedding_dimensions} + ' Dimensionen)') : '' }"/>
+        </VBox>
+      </f:DynamicPageHeader>
+    </f:header>
+
+    <f:content>
+      <VBox>
+        <MessageStrip text="Backend nicht erreichbar: {/config/error}" type="Error" showIcon="true"
+          visible="{= !!${/config/error} }" class="sapUiSmallMarginBottom"/>
+        <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+          visible="{= ${/config/loaded} &amp;&amp; !${/config/error} &amp;&amp; !${/config/partner/available} }"
+          text="Keine Geschäftspartnerdaten vorhanden (input/GPA)."/>
+        <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+          visible="{= ${/config/loaded} &amp;&amp; !${/config/error} &amp;&amp; !!${/config/partner/available} &amp;&amp; (!${/config/partner/indexed} || !${/config/openai_configured}) }"
+          text="{= !${/config/openai_configured}
+            ? 'OPENAI_API_KEY ist nicht konfiguriert - nur unscharfe Textsuche verfügbar, keine semantische Suche und keine KI-Funktionen.'
+            : 'Der Vektorindex der Geschäftspartner ist leer - semantische Suche erst nach python -m backend.indexer partner verfügbar.' }"/>
+
+        <!-- landing page before the first search -->
+        <IllustratedMessage visible="{= !${bp>/result} }" illustrationType="sapIllus-SimpleMagnifier" class="mdsaLanding"
+          title="Geschäftspartner durchsuchen" enableVerticalResponsiveness="true"
+          description="Suchen Sie exakt (Partner-, Kunden-, Lieferantennummer, USt-ID, IBAN, E-Mail, Telefon), unscharf mit Tippfehlern oder beschreiben Sie den gesuchten Partner in eigenen Worten.">
+          <additionalContent>
+            <FlexBox wrap="Wrap" justifyContent="Center" class="mdsaExamples"
+              items="{path: 'bp>/examples', templateShareable: false}">
+              <Button text="{bp>text}" tooltip="{bp>hint}" type="Ghost" press=".onExample" icon="{= ${bp>mode} === 'ai' ? 'sap-icon://ai' : '' }"/>
+            </FlexBox>
+          </additionalContent>
+        </IllustratedMessage>
+
+        <VBox visible="{= !!${bp>/result} }">
+          <MessageStrip visible="{= !!${bp>/result/did_you_mean} }" type="Information" showIcon="true"
+            class="sapUiSmallMarginBottom" text="Unscharfe Treffer berücksichtigt">
+            <link>
+              <Link text="Meinten Sie: {bp>/result/did_you_mean}" press=".onDidYouMean"/>
+            </link>
+          </MessageStrip>
+          <VBox visible="{= ${bp>/result/mode} === 'ai' &amp;&amp; !!${bp>/result/interpretation} }" class="sapUiSmallMarginBottom">
+            <MessageStrip type="{= ${bp>/result/total} > 0 ? 'Success' : 'Warning' }" customIcon="sap-icon://ai" showIcon="true"
+              text="{bp>/result/summary}" class="sapUiTinyMarginBottom"/>
+            <Text class="mdsaStatus" text="{bp>/aiInfo}"/>
+          </VBox>
+          <List items="{bp>/result/warnings}" visible="{= ${bp>/result/warnings}.length > 0 }" class="sapUiSmallMarginBottom">
+            <StandardListItem title="{bp>}" icon="sap-icon://message-warning" highlight="Warning"/>
+          </List>
+
+          <Table id="hits" items="{path: 'bp>/result/hits', templateShareable: false}" growing="true" growingThreshold="25"
+            growingScrollToLoad="true" busy="{bp>/busy}" busyIndicatorDelay="0" sticky="ColumnHeaders,HeaderToolbar"
+            noDataText="Keine Treffer - andere Schreibweise versuchen oder den Modus Semantisch nutzen" popinLayout="GridSmall">
+            <headerToolbar>
+              <OverflowToolbar>
+                <Title text="{= ${bp>/result/total} === undefined ? 'Treffer' : ('Treffer (' + ${bp>/result/total} + ')') }" level="H2"/>
+                <ToolbarSpacer/>
+                <Text text="{bp>/resultInfo}" class="mdsaStatus"/>
+                <Button icon="sap-icon://hint" type="Transparent" tooltip="Wie wurde gesucht?" press=".onShowExpansions"
+                  visible="{= ${bp>/result/expansions}.length > 0 }"/>
+              </OverflowToolbar>
+            </headerToolbar>
+            <columns>
+              <Column width="9rem"><Text text="Partner"/></Column>
+              <Column><Text text="Name"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Adresse"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true" width="9rem"><Text text="Kunde / Lieferant"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Kommunikation"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true" width="{= ${bp>/result/mode} === 'ai' ? '26rem' : '13rem' }">
+                <Text text="{= ${bp>/result/mode} === 'ai' ? 'KI-Bewertung' : 'Treffer über' }"/>
+              </Column>
+              <Column hAlign="End" width="8rem"><Text text="Relevanz"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem type="Navigation" press=".onHitPress" highlight="{= ${bp>deleted} ? 'Error' : ${bp>blocked} ? 'Warning' : 'None' }">
+                <ObjectIdentifier title="{bp>partner}" text="{= ${bp>deleted} ? 'Löschvormerkung' : ${bp>type_text} }"/>
+                <VBox>
+                  <HBox alignItems="Center">
+                    <core:Icon src="{= ${bp>type} === '1' ? 'sap-icon://person-placeholder' : ${bp>type} === '3' ? 'sap-icon://group' : 'sap-icon://building' }"
+                      class="sapUiTinyMarginEnd" tooltip="{bp>type_text}"/>
+                    <FormattedText htmlText="{bp>name_html}" class="mdsaHitText"/>
+                  </HBox>
+                  <HBox wrap="Wrap" class="mdsaBadges">
+                    <HBox items="{path: 'bp>roles', templateShareable: false}">
+                      <ObjectStatus text="{bp>}" state="{= ${bp>} === 'Kunde' ? 'Indication06' : ${bp>} === 'Lieferant' ? 'Indication07' : 'Information' }" class="sapUiTinyMarginEnd"/>
+                    </HBox>
+                    <ObjectStatus text="{= ${bp>contacts} + (${bp>type} === '1' ? ' Unternehmen' : ' Ansprechpartner') }" icon="sap-icon://chain-link"
+                      state="Information" visible="{= ${bp>contacts} > 0 }" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus text="{= ${bp>materials} + ' Materialien' }" icon="sap-icon://product" state="Information"
+                      visible="{= ${bp>materials} > 0 }" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus text="{= ${bp>blocks}.join(', ') }" state="Warning" icon="sap-icon://locked" visible="{= !!${bp>blocked} }"/>
+                  </HBox>
+                </VBox>
+                <FormattedText htmlText="{bp>address_html}" class="mdsaHitText"/>
+                <VBox>
+                  <Text text="{= ${bp>kunnr} ? 'Kunde ' + ${bp>kunnr} : '' }" visible="{= !!${bp>kunnr} }"/>
+                  <Text text="{= ${bp>lifnr} ? 'Lieferant ' + ${bp>lifnr} : '' }" visible="{= !!${bp>lifnr} }"/>
+                </VBox>
+                <VBox>
+                  <Text text="{bp>email}" visible="{= !!${bp>email} }" wrapping="false"/>
+                  <Text text="{bp>phone}" visible="{= !!${bp>phone} }" wrapping="false"/>
+                </VBox>
+                <VBox>
+                  <VBox visible="{= !!${bp>ai_verdict} }">
+                    <ObjectStatus text="{bp>ai_verdict}" state="{= ${bp>ai_verdict} === 'passend' ? 'Success' : 'Warning' }" inverted="true"/>
+                    <HBox wrap="Wrap" class="mdsaBadges sapUiTinyMarginTop" items="{path: 'bp>ai_checks', templateShareable: false}">
+                      <ObjectStatus text="{bp>requirement}" tooltip="{= ${bp>evidence} || 'nicht in den Stammdaten' }" class="sapUiTinyMarginEnd"
+                        icon="{= ${bp>status} === 'belegt' ? 'sap-icon://accept' : ${bp>status} === 'widerspricht' ? 'sap-icon://decline' : 'sap-icon://question-mark' }"
+                        state="{= ${bp>status} === 'belegt' ? 'Success' : ${bp>status} === 'widerspricht' ? 'Error' : 'None' }"/>
+                    </HBox>
+                    <Text text="{bp>ai_reason}" class="mdsaStatus"/>
+                  </VBox>
+                  <HBox wrap="Wrap" class="mdsaBadges" visible="{= !${bp>ai_verdict} }">
+                    <ObjectStatus visible="{= !!${bp>exact} }" text="Exakt: {bp>exact}" state="Success" inverted="true" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus visible="{= ${bp>semantic} !== null }" text="{= 'Semantisch ' + Math.round(${bp>semantic} * 100) + ' %' }"
+                      state="Information" inverted="true" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus visible="{= ${bp>lexical} !== null }" text="{= 'Text ' + Math.round(${bp>lexical} * 100) + ' %' }"
+                      state="Indication05" inverted="true"/>
+                  </HBox>
+                </VBox>
+                <ProgressIndicator percentValue="{bp>relevance}" displayValue="{bp>relevance} %" height="1.25rem"
+                  state="{= ${bp>relevance} >= 70 ? 'Success' : ${bp>relevance} >= 40 ? 'Information' : 'None' }"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+        </VBox>
+      </VBox>
+    </f:content>
+  </f:DynamicPage>
+</mvc:View>

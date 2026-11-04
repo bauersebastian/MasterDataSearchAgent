@@ -10,28 +10,30 @@ sap.ui.define([
   "use strict";
 
   const EXAMPLES = [
-    { text: "Kabelverschraubung Messing M25", hint: "Hybrid: Text und Bedeutung" },
-    { text: "Schraubenzieher", hint: "Synonym - im Bestand heißt es Schraubendreher" },
-    { text: "verschraubng mesing", hint: "Tippfehler werden toleriert" },
-    { text: "Leuchte fürs Büro, neutralweiß", hint: "Semantisch: neutralweiß = Lichtfarbe 840" },
-    { text: "Befestigung für Porenbeton", hint: "Semantisch: Gasbetondübel" },
-    { text: "4021598024366", hint: "Exakt: EAN" },
-    { text: "20156", hint: "Exakt: Materialnummer" },
-    { text: "Veganes Waschmittel ohne Mikroplastik mit Inhaltsstoffen aus EU-Anbau", hint: "KI-Suche: Anforderungen anhand der Merkmale prüfen", mode: "ai" },
-    { text: "Tieflöffel aus Edelstahl für einen Minibagger bis 2 Tonnen", hint: "KI-Suche: Merkmal und Langtext auswerten", mode: "ai" }
+    { text: "Sommer & Winter", hint: "Hybrid: Name - mehrfach angelegt, siehe Dubletten" },
+    { text: "somer wintr", hint: "Tippfehler werden toleriert" },
+    { text: "Spedition", hint: "Text und Bedeutung: auch Logistiker ohne das Wort im Namen" },
+    { text: "Lieferant für Kabelverschraubungen", hint: "Semantisch: über die gelieferten Materialien (Einkaufsinfosätze)" },
+    { text: "BMW", hint: "Suchbegriff und Name" },
+    { text: "info@fis-gmbh.de", hint: "Exakt: E-Mail-Adresse" },
+    { text: "DE79100100100012345678", hint: "Exakt: IBAN" },
+    { text: "300022", hint: "Exakt: Partnernummer" },
+    { text: "Lieferant für Akkuschrauber in Unterfranken mit E-Mail-Adresse", hint: "KI-Suche: Rolle, Region und Kommunikation prüfen", mode: "ai" },
+    { text: "Kunde in Österreich oder der Schweiz mit Umsatzangabe", hint: "KI-Suche: Land und Kundendaten prüfen", mode: "ai" }
   ];
   const MODE_TEXT = { hybrid: "Hybrid", semantic: "Semantisch", lexical: "Unscharf", ai: "KI-Suche" };
 
-  return Controller.extend("fis.mdsa.controller.Search", {
+  return Controller.extend("fis.mdsa.controller.partner.Search", {
     onInit() {
-      this.model = this.getOwnerComponent().getModel();
+      this.model = this.getOwnerComponent().getModel("bp");
       this.model.setProperty("/examples", EXAMPLES);
       this.getView().setModel(new JSONModel({ items: [] }), "suggest");
-      this.getOwnerComponent().getRouter().getRoute("search").attachPatternMatched(this.onRouteMatched, this);
+      this.getOwnerComponent().getRouter().getRoute("partnerSearch").attachPatternMatched(this.onRouteMatched, this);
     },
 
-    // #?query=...&mode=... -> run the search (bookmarkable, browser back works)
+    // #partner?query=...&mode=... -> run the search (bookmarkable, browser back works)
     onRouteMatched(event) {
+      this.byId("objectSwitch").setSelectedKey("partner");
       const args = event.getParameter("arguments")["?query"] || {};
       const query = args.query || "";
       const mode = args.mode || this.model.getProperty("/mode");
@@ -47,13 +49,23 @@ sap.ui.define([
 
     navigate(query) {
       const mode = this.model.getProperty("/mode");
-      this.getOwnerComponent().getRouter().navTo("search", { query: query ? { query, mode } : {} });
+      this.getOwnerComponent().getRouter().navTo("partnerSearch", { query: query ? { query, mode } : {} });
+    },
+
+    // Geschäftspartner <-> Material: the material search comes back with its last query
+    onObjectSwitch(event) {
+      if (event.getParameter("item").getKey() !== "material") {
+        return;
+      }
+      const m = this.getOwnerComponent().getModel();
+      const query = m.getProperty("/result/query");
+      this.getOwnerComponent().getRouter().navTo("search", { query: query ? { query, mode: m.getProperty("/mode") } : {} });
     },
 
     onSearch(event) {
       const item = event.getParameter("suggestionItem");
-      if (item) {   // chosen suggestion -> open the material directly
-        this.getOwnerComponent().getRouter().navTo("material", { matnr: item.getKey() });
+      if (item) {   // chosen suggestion -> open the partner directly
+        this.getOwnerComponent().getRouter().navTo("partner", { partner: item.getKey() });
         return;
       }
       if (event.getParameter("clearButtonPressed")) {
@@ -79,7 +91,7 @@ sap.ui.define([
         return;
       }
       try {
-        const items = await api(`api/suggest?q=${encodeURIComponent(value)}`);
+        const items = await api(`api/partners/suggest?q=${encodeURIComponent(value)}`);
         if (field.getValue().trim() === value) {   // ignore answers to outdated keystrokes
           this.getView().getModel("suggest").setProperty("/items", items);
           field.suggest();
@@ -103,8 +115,8 @@ sap.ui.define([
     },
 
     onExample(event) {
-      const example = event.getSource().getBindingContext().getObject();
-      if (example.mode && this.model.getProperty("/config/openai_configured")) {
+      const example = event.getSource().getBindingContext("bp").getObject();
+      if (example.mode && this.getOwnerComponent().getModel().getProperty("/config/openai_configured")) {
         this.model.setProperty("/mode", example.mode);
       }
       this.navigate(example.text);
@@ -115,7 +127,7 @@ sap.ui.define([
     },
 
     onReset() {
-      ["/mtart", "/matkl", "/vendor"].forEach((p) => this.model.setProperty(p, []));
+      ["/type", "/role", "/country", "/group"].forEach((p) => this.model.setProperty(p, []));
       this.model.setProperty("/includeDeleted", false);
       this.model.setProperty("/mode", "hybrid");
       this.navigate("");
@@ -125,8 +137,8 @@ sap.ui.define([
       const m = this.model;
       const body = {
         query: m.getProperty("/query").trim(), mode: m.getProperty("/mode"),
-        mtart: m.getProperty("/mtart"), matkl: m.getProperty("/matkl"), vendor: m.getProperty("/vendor"),
-        include_deleted: m.getProperty("/includeDeleted"), limit: 200
+        type: m.getProperty("/type"), role: m.getProperty("/role"), country: m.getProperty("/country"),
+        group: m.getProperty("/group"), include_deleted: m.getProperty("/includeDeleted"), limit: 200
       };
       if (!body.query) {
         return;
@@ -137,7 +149,7 @@ sap.ui.define([
       }
       const started = performance.now();
       try {
-        const result = await api("api/search", body);
+        const result = await api("api/partners/search", body);
         m.setProperty("/result", result);
         m.setProperty("/aiInfo", result.interpretation ? this.formatInterpretation(result) : "");
         const seconds = ((performance.now() - started) / 1000).toFixed(2);
@@ -166,8 +178,8 @@ sap.ui.define([
     },
 
     onHitPress(event) {
-      const matnr = event.getSource().getBindingContext().getProperty("matnr");
-      this.getOwnerComponent().getRouter().navTo("material", { matnr });
+      const partner = event.getSource().getBindingContext("bp").getProperty("partner");
+      this.getOwnerComponent().getRouter().navTo("partner", { partner });
     },
 
     // popover: how each query word was expanded (exact, prefix, compound part, typo)

@@ -1,47 +1,55 @@
-"""Embed all materials from the input folder into the bundled Chroma DB.
+"""Embed the master data from the input folder into the Chroma DB (one collection per object).
 
-    python -m backend.indexer            # embed new and changed materials (resumable)
-    python -m backend.indexer --rebuild  # drop the collection and embed everything again
+    python -m backend.indexer                     # materials and business partners: new and changed ones (resumable)
+    python -m backend.indexer partner             # only business partners (or: material)
+    python -m backend.indexer partner --rebuild   # drop the collection and embed everything again
 
-Materials whose document did not change (content hash in the metadata) are skipped, so an interrupted run
+Objects whose document did not change (content hash in the metadata) are skipped, so an interrupted run
 can simply be started again.
 """
 import argparse
-import shutil
 import sys
 import time
 
 import openai
 
 from . import vectordb
-from .config import CHROMA_DIR, EMBEDDING_BATCH, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_BASE_URL
-from .data import load_materials
+from .config import (EMBEDDING_BATCH, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, MATERIAL_COLLECTION, OPENAI_BASE_URL,
+                     PARTNER_COLLECTION)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rebuild", action="store_true", help="delete the vector DB and embed everything again")
-    args = parser.parse_args()
+def load(kind: str) -> dict:
+    if kind == "material":
+        from .material.data import load_materials
+        return load_materials()
+    from .partner.data import load_partners
+    return load_partners()
 
-    if args.rebuild and CHROMA_DIR.exists():
-        shutil.rmtree(CHROMA_DIR)
-    materials = load_materials()
-    col = vectordb.collection()
+
+OBJECTS = {"material": (MATERIAL_COLLECTION, "Materialien"), "partner": (PARTNER_COLLECTION, "Geschäftspartner")}
+
+
+def index(kind: str, rebuild: bool) -> None:
+    name, label = OBJECTS[kind]
+    if rebuild:
+        vectordb.drop(name)
+    objects = load(kind)
+    col = vectordb.collection(name)
     existing = col.get(include=["metadatas"])
     hashes = {i: (m or {}).get("hash") for i, m in zip(existing["ids"], existing["metadatas"])}
 
-    stale = [i for i in hashes if i not in materials]
+    stale = [i for i in hashes if i not in objects]
     if stale:
         col.delete(ids=stale)
-    todo = [m for m in materials.values() if hashes.get(m.id) != m.content_hash()]
-    print(f"{len(materials)} Materialien, {len(materials) - len(todo)} aktuell im Index, {len(stale)} entfernt, "
+    todo = [o for o in objects.values() if hashes.get(o.id) != o.content_hash()]
+    print(f"{len(objects)} {label}, {len(objects) - len(todo)} aktuell im Index '{name}', {len(stale)} entfernt, "
           f"{len(todo)} zu embedden mit {EMBEDDING_MODEL} ({EMBEDDING_DIMENSIONS} Dim.) "
           f"über {OPENAI_BASE_URL or 'api.openai.com'}")
 
     started = time.time()
     for start in range(0, len(todo), EMBEDDING_BATCH):
         batch = todo[start:start + EMBEDDING_BATCH]
-        docs = [m.document() for m in batch]
+        docs = [o.document() for o in batch]
         for attempt in range(6):
             try:
                 embeddings = vectordb.embed(docs)
@@ -52,14 +60,24 @@ def main() -> None:
                 time.sleep(wait)
         else:
             sys.exit("Abbruch: zu viele Fehler beim Embedding - Lauf später erneut starten (setzt fort)")
-        col.upsert(
-            ids=[m.id for m in batch], embeddings=embeddings, documents=docs,
-            metadatas=[{"hash": m.content_hash(), "mtart": m.mara.get("MTART", ""),
-                        "matkl": m.mara.get("MATKL", "")} for m in batch],
-        )
-        done = start + len(batch)
-        print(f"  {done}/{len(todo)} ({time.time() - started:.0f} s)")
-    print(f"Fertig: {col.count()} Materialien im Vektorindex {CHROMA_DIR}")
+        col.upsert(ids=[o.id for o in batch], embeddings=embeddings, documents=docs,
+                   metadatas=[{"hash": o.content_hash(), **o.index_metadata()} for o in batch])
+        print(f"  {start + len(batch)}/{len(todo)} ({time.time() - started:.0f} s)")
+    print(f"Fertig: {col.count()} {label} im Vektorindex '{name}'")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("objects", nargs="*", metavar="material|partner", help="objects to index (default: all)")
+    parser.add_argument("--rebuild", action="store_true", help="delete the collection(s) and embed everything again")
+    args = parser.parse_args()
+    if unknown := set(args.objects) - set(OBJECTS):
+        parser.error(f"unbekanntes Objekt: {', '.join(sorted(unknown))} (material oder partner)")
+    for kind in args.objects or list(OBJECTS):
+        try:
+            index(kind, args.rebuild)
+        except FileNotFoundError as e:
+            print(f"{OBJECTS[kind][1]} übersprungen: {e}")
 
 
 if __name__ == "__main__":

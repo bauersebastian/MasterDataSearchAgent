@@ -89,7 +89,30 @@ sap.ui.define([
           Tabellen, bei Stücklistenköpfen inkl. STKO/STPO), mit der Materialnummer als <code>MATNR</code> an SAP – das
           vorhandene Material wird geändert. Vorher wird die XML-Nachricht angezeigt und eine Bestätigung abgefragt.</li>
           <li><strong>Suchdokument:</strong> der Text, der für die semantische Suche in die Vektordatenbank eingebettet wurde.</li>
+          <li><strong>Lieferant</strong> in den Einkaufsinfosätzen: öffnet den Geschäftspartner.</li>
         </ul>`
+    },
+    {
+      title: "Geschäftspartnersuche",
+      html: `<p>Mit dem Schalter <strong>Material | Geschäftspartner</strong> über dem Suchfeld wechseln Sie zwischen den
+        beiden Stammdatenobjekten; jede Suche behält ihre letzte Anfrage. Die Geschäftspartnersuche durchsucht den
+        GPA-Extrakt (Allgemeine Daten, Rollen, Adressen und Kommunikation, Beziehungen / Ansprechpartner, Kunden- und
+        Lieferantendaten, Bankverbindungen, Steuer- und Identifikationsnummern) mit denselben Suchmodi:</p>
+        <ul>
+          <li><strong>Exakt:</strong> Partner-, Kunden-, Lieferantennummer, externe Partnernummer, Steuernummer / USt-ID,
+          IBAN, Identifikationsnummer, E-Mail, Telefon, Fax, Webseite.</li>
+          <li><strong>Unscharf:</strong> Namen, Suchbegriffe, Adressen, Kommunikationsdaten und Nummern mit Tippfehler-Toleranz.</li>
+          <li><strong>Semantisch:</strong> zusätzlich die Namen der Ansprechpartner (bzw. die Unternehmen einer Person) und
+          bei Lieferanten die <strong>gelieferten Materialien</strong> aus den Einkaufsinfosätzen – <em>Lieferant für
+          Kabelverschraubungen</em> findet Lieferanten, auch wenn das Wort nicht im Namen steht.</li>
+          <li><strong>KI-Suche:</strong> z. B. <em>Lieferant für Akkuschrauber in Unterfranken mit E-Mail-Adresse</em> – das
+          LLM prüft Rolle, Region (aus PLZ und Ort), Kommunikation usw. ausschließlich anhand der Stammdaten.</li>
+          <li><strong>Filter:</strong> Partnertyp (Organisation, Person, Gruppe), Rolle (Kunde, Lieferant, Kontaktperson …),
+          Land der Standardadresse, Gruppierung.</li>
+        </ul>
+        <p>Die Detailseite zeigt Adressen mit Kommunikationsdaten, den Beziehungsgraphen mit den Ansprechpartnern
+        (Klick öffnet den Partner), die gelieferten Materialien (Klick öffnet das Material) und alle Tabellen des
+        Extrakts unverändert.</p>`
     }
   ];
 
