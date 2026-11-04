@@ -64,5 +64,15 @@ def get_config() -> dict:
     }
 
 
+class Frontend(StaticFiles):
+    """Static UI5 files, revalidated on every load (ETag): without it browsers keep stale views / manifest after an
+    update or a branch switch and the app stays blank."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 # UI5 app -- mounted last so the /api routes take precedence
-app.mount("/", StaticFiles(directory=config.APP_DIR / "frontend", html=True), name="frontend")
+app.mount("/", Frontend(directory=config.APP_DIR / "frontend", html=True), name="frontend")
