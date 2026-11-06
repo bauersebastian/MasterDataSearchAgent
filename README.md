@@ -29,6 +29,28 @@ changing the embedding model or `MDSA_EMBEDDING_DIMENSIONS`). With a new extract
 
 Without `OPENAI_API_KEY` or without a built index the app still works with the fuzzy text search only and says so.
 
+## Docker
+
+```bash
+cp .env.example .env        # fill in OPENAI_API_KEY, SAP_USER, SAP_PASSWORD
+docker build --tag mpm-search .
+docker run \
+  --rm \
+  --env-file .env \
+  --volume mpm-search-data:/app/data \
+  mpm-search \
+  python -m backend.indexer
+docker run \
+  --rm \
+  --env-file .env \
+  --publish 127.0.0.1:8000:8000 \
+  --volume mpm-search-data:/app/data \
+  mpm-search
+```
+
+`.env` is not part of the image and has to be passed at runtime. `input/` is part of the image, the volume keeps the
+vector DB. With a new extract, build the image and run the indexer again.
+
 ## Search
 
 One search document per material: short texts (D/E/F/N), long texts (basic data, purchase order, sales, internal
