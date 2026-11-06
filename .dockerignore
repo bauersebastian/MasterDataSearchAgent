@@ -1,0 +1,7 @@
+*
+!backend/
+!frontend/
+!input/
+!certs/
+!requirements.txt
+**/__pycache__
