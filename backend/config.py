@@ -69,3 +69,9 @@ KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATNR")
 # business partners (GPA tables G000, G100, ...): key column of every line and DXTO variant of the partner import
 PARTNER_KEY_FIELD = os.getenv("SAP_PARTNER_KEY_FIELD", "PARTNER")
 PARTNER_VARIANT = os.getenv("SAP_PARTNER_VARIANT", "BRUNO_GPA")
+
+# --- SAP OData (live data, read only, same user) -----------------------------
+SAP_CLIENT = os.getenv("SAP_CLIENT", "100")
+# base URL of the OData services (standard APIs API_SALES_ORDER_SRV, API_SALES_QUOTATION_SRV, ...)
+SAP_ODATA_URL = os.getenv("SAP_ODATA_URL", "http://fis127.fis-gmbh.de:8000/sap/opu/odata/sap").rstrip("/")
+ORDERS_LIMIT = int(os.getenv("SAP_ORDERS_LIMIT", "500"))

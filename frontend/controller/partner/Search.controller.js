@@ -10,8 +10,10 @@ sap.ui.define([
   "use strict";
 
   const EXAMPLES = [
-    { text: "Sommer & Winter", hint: "Hybrid: Name - mehrfach angelegt, siehe Dubletten" },
-    { text: "somer wintr", hint: "Tippfehler werden toleriert" },
+    { text: "PKE Deutschland", hint: "Gleiche Steuernummer, zwei Standorte - Löschprüfung: 1001313 ist Rechnungsempfänger in offenen Aufträgen von 1001312" },
+    { text: "Jockel Brandschutz", hint: "Gleiche Steuernummer, zwei Standorte - Löschprüfung: 1001316 ist Warenempfänger in offenen Aufträgen von 1001315" },
+    { text: "Schiedel", hint: "Dublette an derselben Adresse - Löschprüfung ohne offene Belege" },
+    { text: "jokel brandschuz", hint: "Tippfehler werden toleriert" },
     { text: "Spedition", hint: "Text und Bedeutung: auch Logistiker ohne das Wort im Namen" },
     { text: "Lieferant für Kabelverschraubungen", hint: "Semantisch: über die gelieferten Materialien (Einkaufsinfosätze)" },
     { text: "BMW", hint: "Suchbegriff und Name" },

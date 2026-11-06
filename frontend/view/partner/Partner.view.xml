@@ -27,6 +27,8 @@
           <Button text="An SAP senden" icon="sap-icon://upload-to-cloud" type="Emphasized" press=".onOpenSapDialog"
             enabled="{= !${p>/busy} }"/>
           <Button text="Dubletten prüfen" icon="sap-icon://compare" press=".onScrollToDuplicates"/>
+          <Button text="Löschprüfung" icon="sap-icon://delete" press=".onDeletionCheck" enabled="{= !${p>/busy} }"
+            tooltip="Offene Belege in SAP prüfen, die ein Löschen des Partners verhindern (nur lesend)"/>
           <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
         </uxap:actions>
       </uxap:ObjectPageDynamicHeaderTitle>
@@ -207,6 +209,61 @@
                 </ColumnListItem>
               </items>
             </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection id="ordersSection" title="Kundenaufträge" titleUppercase="false" visible="{= !!${p>/kunnr} }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Offene Kundenaufträge (live aus SAP)" titleUppercase="false">
+            <VBox>
+              <MessageStrip type="Error" showIcon="true" visible="{= !!${orders>/error} }" text="{orders>/error}"
+                class="sapUiSmallMarginBottom"/>
+              <MessageStrip type="Warning" showIcon="true" visible="{= !!${orders>/truncated} }" class="sapUiSmallMarginBottom"
+                text="{= 'Es gibt ' + ${orders>/count} + ' offene Aufträge - angezeigt werden die neuesten ' + (${orders>/orders} ? ${orders>/orders}.length : 0) + '.' }"/>
+              <Table items="{path: 'orders>/orders', templateShareable: false}" growing="true" growingThreshold="20"
+                growingScrollToLoad="false" busy="{orders>/busy}" busyIndicatorDelay="0" popinLayout="GridSmall"
+                noDataText="{= ${orders>/error} ? 'Aufträge konnten nicht gelesen werden' : 'Keine offenen Kundenaufträge' }">
+                <headerToolbar>
+                  <OverflowToolbar style="Clear">
+                    <Title level="H3" text="{= 'Offene Aufträge (' + (${orders>/count} || 0) + ')' }"/>
+                    <Text class="mdsaStatus" text="{orders>/info}"/>
+                    <ToolbarSpacer/>
+                    <Button icon="sap-icon://refresh" type="Transparent" tooltip="Neu aus SAP lesen" press=".onReloadOrders"
+                      enabled="{= !${orders>/busy} }"/>
+                  </OverflowToolbar>
+                </headerToolbar>
+                <columns>
+                  <Column width="7rem"><Text text="Auftrag"/></Column>
+                  <Column width="5rem"><Text text="Art"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true" width="7rem"><Text text="Angelegt"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Bestellnr. des Kunden"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true" width="8rem"><Text text="Wunschlieferdatum"/></Column>
+                  <Column hAlign="End" width="9rem"><Text text="Nettowert"/></Column>
+                  <Column width="12rem"><Text text="Lieferstatus"/></Column>
+                  <Column minScreenWidth="Desktop" demandPopin="true" width="8rem"><Text text="Verkaufsbereich"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem highlight="{= ${orders>delivery_status} === 'B' ? 'Information' : 'None' }">
+                    <ObjectIdentifier title="{orders>order}" text="{orders>created_by}"/>
+                    <Text text="{orders>type}"/>
+                    <Text text="{path: 'orders>created', formatter: '.formatDate'}"/>
+                    <Text text="{orders>customer_po}"/>
+                    <Text text="{path: 'orders>requested_delivery', formatter: '.formatDate'}"/>
+                    <ObjectNumber number="{path: 'orders>net_amount', formatter: '.formatAmount'}" unit="{orders>currency}"/>
+                    <VBox>
+                      <ObjectStatus text="{orders>delivery_status_text}"
+                        state="{= ${orders>delivery_status} === 'B' ? 'Information' : 'Warning' }"/>
+                      <ObjectStatus visible="{= !!${orders>delivery_block} }" text="Liefersperre {orders>delivery_block}"
+                        state="Error" icon="sap-icon://locked"/>
+                      <ObjectStatus visible="{= !!${orders>billing_block} }" text="Fakturasperre {orders>billing_block}"
+                        state="Error" icon="sap-icon://locked"/>
+                    </VBox>
+                    <Text text="{orders>sales_area}"/>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </VBox>
           </uxap:ObjectPageSubSection>
         </uxap:subSections>
       </uxap:ObjectPageSection>

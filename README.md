@@ -181,6 +181,41 @@ format and dialog, `GET /api/partners/{partner}/xml`, then `POST /api/sap/post`)
   which are not loaded and not sent
 - `IfVariant` is `SAP_PARTNER_VARIANT` (default `BRUNO_GPA`; materials keep `SAP_VARIANT`, default `BRUNO`)
 
+## Open sales orders of a customer
+
+Section *Kundenaufträge* on the partner object page (only for partners with a customer role): the open sales orders
+(VA01 …) where the customer is the **sold-to party**, read **live** from SAP via the standard OData API
+`API_SALES_ORDER_SRV` (entity `A_SalesOrder`, `SAP_SALES_ORDER_API`, client `SAP_CLIENT` = 100, same user as for
+sending, logon language `SAP_LOGON_LANGUAGE` so that order types come in German, e.g. *TA* instead of *OR*).
+
+- open = overall delivery status `A` (not delivered) or `B` (partially delivered), and not fully rejected
+  (`OverallSDDocumentRejectionSts ne 'C'`); orders without delivery-relevant items (empty delivery status) are not shown
+- header level only: order, type, creation date / user, customer PO number, requested delivery date, net value,
+  delivery status, delivery and billing block, sales area; newest first, at most `SAP_ORDERS_LIMIT` (500) orders,
+  with the total count and the net total per currency
+- the SAP user needs read authorization for the API (`/IWFND/MAINT_SERVICE`: service active, role with
+  `S_SERVICE` and sales order display authorization)
+
+## Deletion check
+
+*Löschprüfung* on the partner object page checks – on demand only, read only – whether open documents in SAP still
+reference the partner (preparation for marking partners as deleted). Live via the standard OData APIs
+(`SAP_ODATA_URL`, client `SAP_CLIENT`), `POST /api/partners/{partner}/deletion-check`. Checked for partners with a
+customer role, the customer in **any partner function** (sold-to, ship-to, bill-to, payer, … – header and item
+partners):
+
+| Area | API | Blocking |
+|---|---|---|
+| Sales orders | `API_SALES_ORDER_SRV` | overall processing status not *C* (completed) – also delivered but not yet billed orders, and orders without delivery-relevant items |
+| Quotations | `API_SALES_QUOTATION_SRV` | not completed and still valid; expired quotations are only a warning |
+| Billing documents | `API_BILLING_DOCUMENT_SRV` | not cancelled, sold-to or payer, not transferred to accounting (transfer status not *C* / *D* / *E*) |
+
+Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: open items
+of the customer / vendor (FI), deliveries without goods issue, contracts, scheduling agreements, returns, credit memo
+requests and, for vendors, purchase orders. The result is *Löschen nicht möglich* (open documents),
+*unvollständig* (no open documents in the checked areas, but areas not checked) or *keine offenen Belege*. Once the
+missing services are activated in `/IWFND/MAINT_SERVICE`, the checks can be added in `backend/partner/deletion_check.py`.
+
 ## OpenAI endpoint
 
 As in the research agent, the default is the Azure OpenAI resource `https://fisg-openai-valuestream-aoi.openai.azure.com/`
@@ -207,6 +242,8 @@ to use api.openai.com instead.
 | GET | `/api/partners/duplicates?max_tier=3&include_deleted=false&refresh=false` | – | duplicate groups over all partners (heuristic), pair counts per tier |
 | GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
 | GET | `/api/partners/{partner}/xml` | – | SOAP message of the partner, tables, endpoint, variant |
+| GET | `/api/partners/{partner}/orders` | – | open sales orders of the customer, live from SAP (`orders`, `count`, `totals`) |
+| POST | `/api/partners/{partner}/deletion-check` | – | open documents blocking the deletion: `verdict` (blocked / incomplete / ok), `checks` with documents |
 | GET | `/api/partners/{partner}/duplicates` | – | duplicate candidates with signals |
 | POST | `/api/partners/{partner}/duplicates/assess` | `{candidates: [partner]}` (optional) | LLM verdicts |
 

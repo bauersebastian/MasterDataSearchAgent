@@ -116,7 +116,17 @@ sap.ui.define([
         <p><strong>An SAP senden</strong> sendet den Geschäftspartner wie ein Material unverändert an SAP: je Tabelle
         (<code>G000</code>, <code>G100</code>, <code>GADC</code>, …) eine Kopfzeile mit den SAP-Feldnamen und eine Zeile je
         Datensatz, jede Zeile mit der Partnernummer als <code>PARTNER</code>. Vorher wird die XML-Nachricht angezeigt und
-        eine Bestätigung abgefragt.</p>`
+        eine Bestätigung abgefragt.</p>
+        <p><strong>Kundenaufträge</strong> (nur bei Partnern mit Kundenrolle): die offenen Kundenaufträge, in denen der
+        Kunde Auftraggeber ist – <em>live aus SAP</em> gelesen. Offen heißt: noch nicht oder nur teilweise geliefert und
+        nicht vollständig abgesagt. Angezeigt werden die Kopfdaten (Auftrag, Art, Bestellnummer des Kunden,
+        Wunschlieferdatum, Nettowert, Lieferstatus, Sperren), die neuesten zuerst.</p>
+        <p><strong>Löschprüfung</strong> prüft auf Knopfdruck (nur lesend, live aus SAP), ob noch offene Belege den
+        Partner verwenden – in <em>jeder</em> Partnerrolle (Auftraggeber, Warenempfänger, Rechnungsempfänger, Regulierer):
+        nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis) und Fakturen, die noch nicht an die
+        Buchhaltung übergeben sind. Bereiche ohne freigeschaltete Schnittstelle (offene Posten, Lieferungen, Kontrakte,
+        Lieferpläne, Retouren, Gutschriftsanforderungen, bei Lieferanten Bestellungen) erscheinen als <em>nicht
+        geprüft</em> – das Ergebnis ist dann „unvollständig“, nie „in Ordnung“.</p>`
     },
     {
       title: "Dublettenprüfung für Geschäftspartner",

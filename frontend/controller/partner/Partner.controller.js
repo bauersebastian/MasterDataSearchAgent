@@ -11,9 +11,10 @@ sap.ui.define([
   "sap/m/Column",
   "sap/m/ColumnListItem",
   "sap/m/ScrollContainer",
+  "sap/ui/core/Fragment",
   "fis/mdsa/controller/api",
   "fis/mdsa/controller/SapDialog"
-], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, api, SapDialog) => {
+], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, Fragment, api, SapDialog) => {
   "use strict";
 
   // German labels of the G000 fields (the rest is shown with its technical name)
@@ -39,6 +40,8 @@ sap.ui.define([
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "p");
       this.getView().setModel(new JSONModel({ candidates: null, shown: null, showAll: false, busy: false }), "d");
+      this.getView().setModel(new JSONModel({ orders: null, busy: false }), "orders");
+      this.getView().setModel(new JSONModel({}), "del");
       this.getOwnerComponent().getRouter().getRoute("partner").attachPatternMatched(this.onRouteMatched, this);
       api("api/partners/tables").then((labels) => { this.tableLabels = labels; }).catch(() => { this.tableLabels = {}; });
     },
@@ -50,6 +53,7 @@ sap.ui.define([
       const p = this.getView().getModel("p");
       p.setData({ partner, busy: true });
       this.getView().getModel("d").setData({ candidates: null, shown: null, showAll: false, busy: true, assessment: null });
+      this.getView().getModel("orders").setData({ orders: null, busy: false });
       this.byId("page").setSelectedSection(null);
       this.partner = partner;
       try {
@@ -66,6 +70,68 @@ sap.ui.define([
         return;
       }
       this.loadCandidates(partner);
+      if (data.kunnr) {
+        this.loadOrders(partner);
+      }
+    },
+
+    // --- open sales orders of the customer, live from SAP (API_SALES_ORDER_SRV) ---
+    async loadOrders(partner) {
+      const o = this.getView().getModel("orders");
+      o.setData({ orders: null, busy: true });
+      try {
+        const result = await api(`api/partners/${encodeURIComponent(partner)}/orders`);
+        if (partner === this.partner) {
+          const totals = result.totals.filter((t) => t.amount).map((t) => `${this.formatAmount(t.amount)} ${t.currency}`).join(" + ");
+          o.setData({ ...result, busy: false,
+            info: `Kunde ${result.customer}${totals ? ` · Summe netto ${totals}` : ""} · gelesen ${new Date().toLocaleTimeString("de-DE")}` });
+        }
+      } catch (e) {
+        if (partner === this.partner) {
+          o.setData({ orders: [], busy: false, error: `Kundenaufträge konnten nicht aus SAP gelesen werden: ${e.message}` });
+        }
+      }
+    },
+
+    // --- deletion check: open documents in SAP, read live on demand only ---
+    async onDeletionCheck() {
+      if (!this.deletionDialog) {
+        this.deletionDialog = await Fragment.load({ id: this.getView().getId(), name: "fis.mdsa.view.partner.DeletionCheck", controller: this });
+        this.getView().addDependent(this.deletionDialog);
+      }
+      this.getView().getModel("del").setData({ partner: this.partner, checks: [] });
+      this.deletionDialog.open();
+      this.onRunDeletionCheck();
+    },
+
+    async onRunDeletionCheck() {
+      const del = this.getView().getModel("del");
+      const partner = this.partner;
+      del.setData({ partner, checks: [], busy: true });
+      try {
+        const result = await api(`api/partners/${encodeURIComponent(partner)}/deletion-check`, {});
+        if (partner === this.partner) {
+          del.setData({ ...result, busy: false, checked_text: new Date(result.checked_at).toLocaleString("de-DE") });
+        }
+      } catch (e) {
+        del.setData({ partner, checks: [], busy: false, verdict: "incomplete", text: `Löschprüfung fehlgeschlagen: ${e.message}` });
+      }
+    },
+
+    onCloseDeletionCheck() {
+      this.deletionDialog.close();
+    },
+
+    onReloadOrders() {
+      this.loadOrders(this.partner);
+    },
+
+    formatDate(iso) {
+      return iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("de-DE") : "";
+    },
+
+    formatAmount(value) {
+      return value === undefined || value === null ? "" : Number(value).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
 
     // --- duplicate check ---

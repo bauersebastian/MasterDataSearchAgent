@@ -1,0 +1,59 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+  <Dialog id="deletionCheckDialog" title="Löschprüfung – Geschäftspartner {del>/partner}" contentWidth="64rem"
+    contentHeight="75%" resizable="true" draggable="true" busy="{del>/busy}" busyIndicatorDelay="0">
+    <content>
+      <VBox class="sapUiSmallMargin">
+        <MessageStrip visible="{= !!${del>/verdict} }" text="{del>/text}" showIcon="true" class="sapUiSmallMarginBottom"
+          type="{= ${del>/verdict} === 'blocked' ? 'Error' : ${del>/verdict} === 'incomplete' ? 'Warning' : 'Success' }"/>
+        <Text class="mdsaStatus sapUiSmallMarginBottom" visible="{= !!${del>/checked_at} }"
+          text="{= 'Live aus SAP gelesen am ' + ${del>/checked_text} + (${del>/kunnr} ? ' · Kunde ' + ${del>/kunnr} : '') + (${del>/lifnr} ? ' · Lieferant ' + ${del>/lifnr} : '') + ' · Es wird nichts geändert.' }"/>
+        <VBox items="{path: 'del>/checks', templateShareable: false}">
+          <Panel expandable="{= ${del>documents}.length > 0 }" expanded="{= ${del>status} === 'blocked' }"
+            class="sapUiTinyMarginBottom" backgroundDesign="Transparent">
+            <headerToolbar>
+              <Toolbar style="Clear">
+                <core:Icon size="1.1rem" class="sapUiTinyMarginEnd"
+                  src="{= ${del>status} === 'blocked' ? 'sap-icon://error' : ${del>status} === 'warning' ? 'sap-icon://warning' : ${del>status} === 'ok' ? 'sap-icon://sys-enter-2' : 'sap-icon://question-mark' }"
+                  color="{= ${del>status} === 'blocked' ? 'Negative' : ${del>status} === 'warning' || ${del>status} === 'not_checked' || ${del>status} === 'error' ? 'Critical' : 'Positive' }"/>
+                <Title text="{del>title}" level="H4"/>
+                <ToolbarSpacer/>
+                <ObjectStatus text="{del>summary}" tooltip="{del>scope}"
+                  state="{= ${del>status} === 'blocked' ? 'Error' : ${del>status} === 'ok' ? 'Success' : 'Warning' }"/>
+              </Toolbar>
+            </headerToolbar>
+            <content>
+              <Text text="{del>scope} · {del>service}" class="mdsaStatus sapUiTinyMarginBottom"/>
+              <Table items="{path: 'del>documents', templateShareable: false}" visible="{= ${del>documents}.length > 0 }" growing="true" growingThreshold="15"
+                growingScrollToLoad="false" popinLayout="GridSmall">
+                <columns>
+                  <Column width="7rem"><Text text="Beleg"/></Column>
+                  <Column width="4rem"><Text text="Art"/></Column>
+                  <Column width="6.5rem" minScreenWidth="Tablet" demandPopin="true"><Text text="Datum"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Rolle des Partners"/></Column>
+                  <Column><Text text="Status"/></Column>
+                  <Column hAlign="End" width="8rem" minScreenWidth="Tablet" demandPopin="true"><Text text="Nettowert"/></Column>
+                  <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Info"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem highlight="{= ${del>blocking} ? 'Error' : 'Warning' }">
+                    <Text text="{del>number}"/>
+                    <Text text="{del>type}"/>
+                    <Text text="{path: 'del>date', formatter: '.formatDate'}"/>
+                    <Text text="{= ${del>roles}.join(', ') }"/>
+                    <ObjectStatus text="{del>status}" state="{= ${del>blocking} ? 'Error' : 'Warning' }"/>
+                    <ObjectNumber number="{path: 'del>amount', formatter: '.formatAmount'}" unit="{del>currency}"/>
+                    <Text text="{del>info}"/>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </content>
+          </Panel>
+        </VBox>
+      </VBox>
+    </content>
+    <buttons>
+      <Button text="Erneut prüfen" icon="sap-icon://refresh" press=".onRunDeletionCheck" enabled="{= !${del>/busy} }"/>
+      <Button text="Schließen" press=".onCloseDeletionCheck"/>
+    </buttons>
+  </Dialog>
+</core:FragmentDefinition>
