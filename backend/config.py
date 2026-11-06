@@ -46,6 +46,7 @@ MAX_RESULTS = 200
 
 # --- Duplicate check ------------------------------------------------------
 DUPLICATE_CANDIDATES = 10
+DUPLICATE_MIN_SCORE = 80   # business partners: candidates below this similarity are not shown by default
 
 # --- SAP endpoint (target = source system of the extract) ---------------------
 # FIS DXTO import web service, same message format as the MasterDataResearchAgent
@@ -65,3 +66,6 @@ VIA_JOB = os.getenv("SAP_VIA_JOB", "X")
 JOB_NAME = os.getenv("SAP_JOB_NAME", "")
 # key column of every table line: MATNR changes the existing material (MATFS would create a new one)
 KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATNR")
+# business partners (GPA tables G000, G100, ...): key column of every line and DXTO variant of the partner import
+PARTNER_KEY_FIELD = os.getenv("SAP_PARTNER_KEY_FIELD", "PARTNER")
+PARTNER_VARIANT = os.getenv("SAP_PARTNER_VARIANT", "BRUNO_GPA")

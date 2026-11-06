@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..errors import openai_error
-from . import ai_search, duplicates, search
+from . import ai_search, duplicates, sap, search
 from .data import load_partners, table_labels
 
 router = APIRouter(prefix="/api/partners")
@@ -56,12 +56,31 @@ def get_table_labels() -> dict[str, str]:
     return table_labels()
 
 
+@router.get("/duplicates")
+def get_duplicate_overview(max_tier: int = Query(3, ge=1, le=4), include_deleted: bool = False,
+                           refresh: bool = False) -> dict:
+    """Groups of probable duplicates over all partners (heuristic, no LLM)."""
+    try:
+        return duplicates.overview(max_tier, include_deleted, refresh)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @router.get("/{partner}")
 def get_partner(partner: str) -> dict:
     p = load_partners().get(partner.lstrip("0") or partner)
     if p is None:
         raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden")
     return p.detail()
+
+
+@router.get("/{partner}/xml")
+def get_xml(partner: str) -> dict:
+    """SOAP message of the partner for the DXTO import (sent with POST /api/sap/post like a material)."""
+    p = load_partners().get(partner.lstrip("0") or partner)
+    if p is None:
+        raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden")
+    return sap.message(p)
 
 
 @router.get("/{partner}/duplicates")

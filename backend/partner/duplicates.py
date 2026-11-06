@@ -3,7 +3,9 @@ legal form), BM25 over name and city, identical addresses and shared keys (tax n
 ID number, customer / vendor cross references); optional assessment of the candidates by the LLM."""
 import json
 import re
+import threading
 from collections import defaultdict
+from datetime import datetime
 from functools import lru_cache
 from typing import Literal, Optional
 
@@ -11,7 +13,7 @@ from pydantic import BaseModel, Field
 from rapidfuzz import fuzz, process
 
 from .. import llm, vectordb
-from ..config import DUPLICATE_CANDIDATES, MODEL, PARTNER_COLLECTION, RRF_K
+from ..config import DUPLICATE_CANDIDATES, DUPLICATE_MIN_SCORE, MODEL, PARTNER_COLLECTION, RRF_K
 from ..textsearch import normalize
 from .data import Partner, load_partners
 from .search import index
@@ -136,9 +138,9 @@ def candidates(partner: str, limit: int = DUPLICATE_CANDIDATES) -> dict:
         elif "gleiche Adresse" in s["shared"] and name >= 0.8:
             score = max(score, 0.9)
         result.append({**c.summary(), "name_similarity": round(name, 3), "semantic": s.get("semantic"),
-                       "lexical": s.get("lexical"), "shared": s["shared"],
+                       "lexical": s.get("lexical"), "shared": s["shared"], "strong": bool(s.get("strong")),
                        "same_type": c.type == p.type, "related": pid in related, "other_place": other_place,
-                       "score": round(score * 100)})
+                       "score": round(score * 100), "relevant": round(score * 100) >= DUPLICATE_MIN_SCORE})
     result.sort(key=lambda c: -c["score"])
     return {"partner": p.summary(), "candidates": result,
             "semantic_available": vectordb.indexed_count(PARTNER_COLLECTION) > 0}
@@ -194,10 +196,10 @@ def assess(partner: str, candidate_ids: Optional[list[str]] = None) -> dict:
     if partner not in partners:
         raise KeyError(partner)
     if not candidate_ids:
-        candidate_ids = [c["partner"] for c in candidates(partner)["candidates"]]
+        candidate_ids = [c["partner"] for c in candidates(partner)["candidates"] if c["relevant"]]
     candidate_ids = [c for c in candidate_ids if c in partners and c != partner][:DUPLICATE_CANDIDATES]
     if not candidate_ids:
-        return {"summary": "Keine Kandidaten gefunden.", "verdicts": []}
+        return {"summary": "Keine relevante Dublette gefunden.", "verdicts": []}
 
     view = lambda pid: json.dumps(partners[pid].llm_view(materials=10), ensure_ascii=False)   # noqa: E731
     user = ("Reference partner:\n" + view(partner) + "\n\nCandidates:\n" + "\n".join(view(c) for c in candidate_ids))
@@ -206,3 +208,123 @@ def assess(partner: str, candidate_ids: Optional[list[str]] = None) -> dict:
     for v in verdicts:
         v.partner = v.partner.lstrip("0") or v.partner
     return {"summary": result.summary, "verdicts": [v.model_dump() for v in verdicts], "model": MODEL}
+
+
+# --- overview of all duplicate candidates ------------------------------------
+
+# tiers of a candidate pair, strongest evidence first
+TIERS = {1: "Starker Schlüssel", 2: "Gleiche Adresse", 3: "Ähnlicher Name", 4: "Nur semantisch"}
+LINK_NAME_SIMILARITY = 0.8
+_overview_lock = threading.Lock()
+
+
+def _cross_reference(pair: dict) -> bool:
+    return any(s.startswith(("Kunde verweist", "Lieferant verweist")) for s in pair["shared"])
+
+
+def pair_tier(c: dict) -> int:
+    if c["strong"]:
+        return 1
+    if "gleiche Adresse" in c["shared"] and c["name_similarity"] >= 0.8:
+        return 2
+    if c["name_similarity"] >= 0.8:
+        return 3
+    return 4
+
+
+@lru_cache(maxsize=1)
+def _all_pairs() -> dict[frozenset, dict]:
+    """Relevant candidate pairs over all partners (heuristic only, no LLM); each pair once, the stronger direction."""
+    pairs: dict[frozenset, dict] = {}
+    for pid in load_partners():
+        for c in candidates(pid)["candidates"]:
+            if not c["relevant"]:
+                continue
+            key = frozenset((pid, c["partner"]))
+            pair = {"a": min(key, key=_sort_key), "b": max(key, key=_sort_key), "tier": pair_tier(c),
+                    "score": c["score"], "shared": c["shared"], "name_similarity": c["name_similarity"],
+                    "semantic": c["semantic"], "other_place": c["other_place"], "same_type": c["same_type"],
+                    "related": c["related"]}
+            old = pairs.get(key)
+            if old is None or (pair["tier"], -pair["score"]) < (old["tier"], -old["score"]):
+                pairs[key] = pair
+    return pairs
+
+
+SIGNAL_LABELS = STRONG_KEYS + WEAK_KEYS + ("gleiche Adresse", "Kunde verweist auf Lieferant",
+                                          "Lieferant verweist auf Kunde", "Geburtsdatum")
+
+
+def signal_label(signal: str) -> str:
+    """'IBAN DE79...' -> 'IBAN' (the kind of the shared value, for the group summary)."""
+    return next((label for label in SIGNAL_LABELS if signal.startswith(label)), signal)
+
+
+def _sort_key(pid: str):
+    return (len(pid), pid)
+
+
+_computed_at: Optional[str] = None
+
+
+def all_pairs(refresh: bool = False) -> dict[frozenset, dict]:
+    """Computed once (about 10 ms per partner, 20 s for the demo extract); parallel first requests wait for it.
+    `refresh` recomputes, e.g. after the vector index was rebuilt."""
+    global _computed_at
+    with _overview_lock:
+        if refresh:
+            _all_pairs.cache_clear()
+        if _all_pairs.cache_info().currsize == 0:
+            _computed_at = datetime.now().isoformat(timespec="seconds")
+        return _all_pairs()
+
+
+def overview(max_tier: int = 3, include_deleted: bool = False, refresh: bool = False) -> dict:
+    """Groups of partners that are probably maintained more than once: connected components of the candidate pairs
+    up to `max_tier`, strongest groups first."""
+    partners = load_partners()
+    pairs = [p for p in all_pairs(refresh).values()
+             if p["tier"] <= max_tier
+             and (include_deleted or not (partners[p["a"]].deleted or partners[p["b"]].deleted))]
+
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    # only pairs with a similar name build groups (A-B, B-C -> A, B, C); otherwise shared test IBANs or info@
+    # addresses chain unrelated companies into one big group. Other pairs (same key, different name: rather a
+    # data error) stay a group of their own.
+    linking = [p for p in pairs if p["name_similarity"] >= LINK_NAME_SIMILARITY or _cross_reference(p)]
+    for p in linking:
+        parent[find(p["a"])] = find(p["b"])
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for p in linking:
+        groups[find(p["a"])].append(p)
+    for p in pairs:
+        if not (p["name_similarity"] >= LINK_NAME_SIMILARITY or _cross_reference(p)):
+            groups[p["a"] + "|" + p["b"]].append(p)
+
+    clusters = []
+    for members in groups.values():
+        ids = sorted({x for p in members for x in (p["a"], p["b"])}, key=_sort_key)
+        members.sort(key=lambda p: (p["tier"], -p["score"]))
+        tier = members[0]["tier"]
+        shared = sorted({signal_label(s) for p in members for s in p["shared"]})
+        clusters.append({"tier": tier, "name_differs": not any(p["name_similarity"] >= LINK_NAME_SIMILARITY for p in members), "tier_text": TIERS[tier], "score": max(p["score"] for p in members),
+                         "size": len(ids), "partners": [partners[i].summary() for i in ids], "pairs": members,
+                         "signals": shared})
+    clusters.sort(key=lambda c: (c["tier"], -c["score"], -c["size"], _sort_key(c["partners"][0]["partner"])))
+    for n, c in enumerate(clusters, 1):
+        c["id"] = n
+
+    counts = defaultdict(int)
+    for p in all_pairs().values():
+        counts[p["tier"]] += 1
+    return {"clusters": clusters, "pairs": len(pairs), "partners": sum(c["size"] for c in clusters),
+            "total_partners": len(partners), "max_tier": max_tier, "computed_at": _computed_at,
+            "semantic_available": vectordb.indexed_count(PARTNER_COLLECTION) > 0,
+            "tiers": [{"tier": t, "text": text, "pairs": counts[t]} for t, text in TIERS.items()]}

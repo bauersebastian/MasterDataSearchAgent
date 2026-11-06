@@ -14,6 +14,8 @@
           <Text text="{bp>/query}"/>
         </f:snappedContent>
         <f:actions>
+          <Button text="Dublettenübersicht" icon="sap-icon://compare" type="Transparent" press=".onDuplicateOverview"
+            tooltip="Alle Geschäftspartner mit wahrscheinlichen Dubletten" enabled="{= !!${/config/partner/available} }"/>
           <Button text="Zurücksetzen" icon="sap-icon://reset" type="Transparent" press=".onReset"/>
           <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
         </f:actions>

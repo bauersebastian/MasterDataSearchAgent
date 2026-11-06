@@ -112,7 +112,11 @@ sap.ui.define([
         </ul>
         <p>Die Detailseite zeigt Adressen mit Kommunikationsdaten, den Beziehungsgraphen mit den Ansprechpartnern
         (Klick öffnet den Partner), die gelieferten Materialien (Klick öffnet das Material) und alle Tabellen des
-        Extrakts unverändert.</p>`
+        Extrakts unverändert.</p>
+        <p><strong>An SAP senden</strong> sendet den Geschäftspartner wie ein Material unverändert an SAP: je Tabelle
+        (<code>G000</code>, <code>G100</code>, <code>GADC</code>, …) eine Kopfzeile mit den SAP-Feldnamen und eine Zeile je
+        Datensatz, jede Zeile mit der Partnernummer als <code>PARTNER</code>. Vorher wird die XML-Nachricht angezeigt und
+        eine Bestätigung abgefragt.</p>`
     },
     {
       title: "Dublettenprüfung für Geschäftspartner",
@@ -122,9 +126,31 @@ sap.ui.define([
         Lieferantennummer eines anderen Partners (oder umgekehrt), ist das ein starkes Indiz – in S/4HANA sollte ein
         Partner beide Rollen tragen. Gleicher Name an einem <em>anderen Ort</em> ist meist eine Niederlassung und wird
         niedriger bewertet.</p>
-        <p><em>KI-Bewertung</em> lässt das LLM jeden Kandidaten als <strong>Dublette</strong>, <strong>mögliche
+        <p>Angezeigt werden nur <strong>relevante</strong> Kandidaten (Ähnlichkeit ab 80 %); gibt es keine, steht dort
+        „Keine relevante Dublette gefunden“. Über den Link darunter lassen sich alle Kandidaten einblenden.</p>
+        <p><em>KI-Bewertung</em> lässt das LLM jeden angezeigten Kandidaten als <strong>Dublette</strong>, <strong>mögliche
         Dublette</strong>, <strong>verwandt</strong> (Niederlassung, Konzerngesellschaft, Ansprechpartner) oder
-        <strong>verschieden</strong> einstufen – mit Begründung.</p>`
+        <strong>verschieden</strong> einstufen – mit Begründung. Als verschieden bewertete Kandidaten werden danach
+        ausgeblendet.</p>`
+    },
+    {
+      title: "Dublettenübersicht für Geschäftspartner",
+      html: `<p>Die <em>Dublettenübersicht</em> (Schaltfläche auf der Geschäftspartnersuche) führt die Dublettenprüfung für
+        <strong>alle</strong> Partner aus – ohne KI – und zeigt die Partner, die wahrscheinlich mehrfach angelegt sind.
+        Jedes Kandidatenpaar erhält die Stufe seines stärksten Hinweises:</p>
+        <ul>
+          <li><strong>Starker Schlüssel:</strong> gleiche Steuernummer, IBAN, Identifikations- oder externe Partnernummer,
+          gleiches Geburtsdatum oder Kunde und Lieferant verweisen aufeinander</li>
+          <li><strong>Gleiche Adresse:</strong> ähnlicher Name an derselben Adresse</li>
+          <li><strong>Ähnlicher Name:</strong> nur der Name ist ähnlich (häufig auch Niederlassungen)</li>
+          <li><strong>Nur semantisch:</strong> nur über die Embeddings ähnlich – viele Fehltreffer, daher standardmäßig aus</li>
+        </ul>
+        <p>Partner mit ähnlichem Namen werden zu <strong>Gruppen</strong> zusammengefasst (A ähnelt B, B ähnelt C → eine
+        Gruppe A, B, C). Paare mit gemeinsamem Schlüssel, aber <em>abweichendem Namen</em> sind meist Datenfehler (z. B.
+        kopierte Bankdaten) und erscheinen einzeln mit dem Hinweis <em>Schlüssel prüfen</em>.</p>
+        <p>Ein Klick auf eine Partnernummer öffnet die Detailseite im Abschnitt <em>Dubletten</em>; dort lässt sich der
+        Partner einzeln per <em>KI-Bewertung</em> prüfen. <em>CSV-Export</em> speichert die angezeigten Gruppen (eine Zeile je
+        Partner), <em>Neu berechnen</em> ermittelt die Kandidaten neu.</p>`
     }
   ];
 

@@ -173,6 +173,10 @@ sap.ui.define([
         + `${result.candidates_checked} Kandidaten anhand der Stammdaten geprüft`;
     },
 
+    onDuplicateOverview() {
+      this.getOwnerComponent().getRouter().navTo("partnerDuplicates");
+    },
+
     onHelp() {
       this.getOwnerComponent().getRouter().navTo("help");
     },

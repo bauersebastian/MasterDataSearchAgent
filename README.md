@@ -126,10 +126,30 @@ On the partner object page (section *Dubletten*), candidates from:
 fused with RRF. The similarity shown is the name or semantic similarity, at least 95 % for a strong shared key and
 90 % for the same name at the same address; the same name in another city (branches) is lowered and flagged
 *anderer Ort*. Badges: shared keys, *anderer Partnertyp*, *steht in Beziehung* (e.g. own contact person).
+Only candidates with a similarity of at least `DUPLICATE_MIN_SCORE` (80 %) are shown; without one the section
+just says *Keine relevante Dublette gefunden*, a link shows all candidates.
 *KI-Bewertung* sends the reference partner and the candidates (names, roles, addresses, communication, customer /
 vendor data, tax numbers, bank accounts, relations, materials supplied) to the LLM, which classifies each candidate
 as *Dublette*, *Mögliche Dublette*, *Verwandt* (branch / site, company of the same group, contact person) or
-*Verschieden* with a reason.
+*Verschieden* with a reason; candidates rated *Verschieden* are hidden afterwards.
+
+### Duplicate overview
+
+*Dublettenübersicht* (button on the partner search page, `#dubletten`) lists all partners with probable duplicates.
+The heuristic check above runs for every partner (about 10 ms each, computed in the background at startup and
+cached; *Neu berechnen* recomputes, e.g. after the vector index was rebuilt). No LLM call is made here; the LLM
+assessment stays on the partner page, where a click on a partner in the overview lands in the *Dubletten* section.
+Each relevant candidate pair is counted once and gets the tier of its strongest evidence:
+
+1. *Starker Schlüssel*: tax number, IBAN, ID number, external partner number, birth date, or customer / vendor cross reference
+2. *Gleiche Adresse*: similar name (≥ 80 %) at the same address
+3. *Ähnlicher Name*: similar name only (often branches)
+4. *Nur semantisch*: similar embeddings only (many false hits, off by default)
+
+Pairs with a similar name are merged into groups (A–B and B–C → A, B, C). Pairs that share a key but have different
+names (usually copied test bank details or tax numbers) are not merged and stay separate, flagged *abweichender Name
+– Schlüssel prüfen*; *Nur gleicher Name* hides them. Filters: tier (default up to 3), deleted partners, text. The
+shown groups can be exported as CSV (one line per partner).
 
 ## Send to SAP
 
@@ -148,6 +168,18 @@ default `fis127 … /s4k_100`, the source system of the extract) – same SOAP m
   the research agent, would create a new one)
 - the dialog shows the XML (read-only, copy / download), asks for confirmation (with a warning for materials flagged
   for deletion) and shows HTTP status and SAP response
+
+*An SAP senden* on the **business partner** object page sends the partner the same way (same endpoint, message
+format and dialog, `GET /api/partners/{partner}/xml`, then `POST /api/sap/post`):
+
+- one `item` per GPA table in extract order (`TObj` = table name, e.g. `G000`, `G100`, `G0BK`, `GTAX`, `GADC`,
+  `GAD2`, `GAD6`, `G021`, `G050`, `GKA1`, `GKVP`, `GLA1`, `GLT3`, …), header line with the SAP field names, one line
+  per row, all fields filled in at least one row of the table, values unchanged
+- every line starts with the key field `PARTNER` (`SAP_PARTNER_KEY_FIELD`) holding the partner number as in the
+  extract (10 digits)
+- `XDELE` is only sent in `G000` (archiving flag of the partner); in the other tables it marks deleted extract rows,
+  which are not loaded and not sent
+- `IfVariant` is `SAP_PARTNER_VARIANT` (default `BRUNO_GPA`; materials keep `SAP_VARIANT`, default `BRUNO`)
 
 ## OpenAI endpoint
 
@@ -172,7 +204,9 @@ to use api.openai.com instead.
 | POST | `/api/partners/search` | `{query, mode: hybrid\|semantic\|lexical\|ai, type[], role[], country[], group[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `name_html`, `address_html` |
 | GET | `/api/partners/suggest?q=` | – | up to 8 suggestions |
 | GET | `/api/partners/tables` | – | GPA table descriptions (objects.md) |
+| GET | `/api/partners/duplicates?max_tier=3&include_deleted=false&refresh=false` | – | duplicate groups over all partners (heuristic), pair counts per tier |
 | GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
+| GET | `/api/partners/{partner}/xml` | – | SOAP message of the partner, tables, endpoint, variant |
 | GET | `/api/partners/{partner}/duplicates` | – | duplicate candidates with signals |
 | POST | `/api/partners/{partner}/duplicates/assess` | `{candidates: [partner]}` (optional) | LLM verdicts |
 

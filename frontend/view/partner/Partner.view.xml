@@ -24,6 +24,8 @@
           <Text text="{p>/type_text} · Geschäftspartner {p>/partner}"/>
         </uxap:expandedContent>
         <uxap:actions>
+          <Button text="An SAP senden" icon="sap-icon://upload-to-cloud" type="Emphasized" press=".onOpenSapDialog"
+            enabled="{= !${p>/busy} }"/>
           <Button text="Dubletten prüfen" icon="sap-icon://compare" press=".onScrollToDuplicates"/>
           <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
         </uxap:actions>
@@ -221,15 +223,19 @@
               <MessageStrip visible="{= !!${d>/assessment} }" text="{d>/assessment/summary}" showIcon="true"
                 type="{= ${d>/duplicateFound} ? 'Warning' : 'Success' }" customIcon="sap-icon://ai"
                 class="sapUiSmallMarginBottom"/>
-              <Table items="{path: 'd>/candidates', templateShareable: false}" busy="{d>/busy}" busyIndicatorDelay="0"
-                noDataText="Keine Kandidaten gefunden">
+              <MessageStrip type="Success" showIcon="true" class="sapUiSmallMarginBottom"
+                visible="{= !!${d>/candidates} &amp;&amp; !${d>/busy} &amp;&amp; ${d>/relevantCount} === 0 &amp;&amp; !${d>/assessment} }"
+                text="Keine relevante Dublette gefunden."/>
+              <Table items="{path: 'd>/shown', templateShareable: false}" busy="{d>/busy}" busyIndicatorDelay="0"
+                visible="{= !${d>/candidates} || ${d>/relevantCount} > 0 || !!${d>/showAll} }"
+                noDataText="Keine relevante Dublette gefunden">
                 <headerToolbar>
                   <OverflowToolbar>
-                    <Title text="Kandidaten ({= ${d>/candidates} ? ${d>/candidates}.length : 0 })" level="H3"/>
+                    <Title text="{= ${d>/showAll} ? 'Alle Kandidaten (' + (${d>/candidates} ? ${d>/candidates}.length : 0) + ')' : 'Relevante Kandidaten (' + (${d>/relevantCount} || 0) + ')' }" level="H3"/>
                     <ToolbarSpacer/>
                     <Button text="KI-Bewertung" icon="sap-icon://ai" type="Emphasized" press=".onAssess"
-                      enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/candidates} &amp;&amp; ${d>/candidates}.length > 0 }"
-                      tooltip="Kandidaten vom LLM bewerten lassen"/>
+                      enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/shown} &amp;&amp; ${d>/shown}.length > 0 }"
+                      tooltip="Angezeigte Kandidaten vom LLM bewerten lassen"/>
                   </OverflowToolbar>
                 </headerToolbar>
                 <columns>
@@ -275,6 +281,9 @@
                   </ColumnListItem>
                 </items>
               </Table>
+              <Link visible="{= !!${d>/candidates} &amp;&amp; ${d>/candidates}.length > (${d>/relevantCount} || 0) }"
+                text="{= ${d>/showAll} ? 'Nur relevante Kandidaten anzeigen' : 'Alle ' + ${d>/candidates}.length + ' Kandidaten anzeigen (auch geringe Ähnlichkeit)' }"
+                press=".onToggleAllCandidates" class="sapUiSmallMarginTop"/>
             </VBox>
           </uxap:ObjectPageSubSection>
         </uxap:subSections>

@@ -2,6 +2,7 @@
 frontend. Each master data object has its own package (backend/material, backend/partner) with its API router."""
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from .material import api as material_api
 from .material import search as material_search
 from .material.data import load_materials
 from .partner import api as partner_api
+from .partner import duplicates as partner_duplicates
 from .partner import search as partner_search
 from .partner.data import load_partners
 
@@ -32,6 +34,8 @@ async def lifespan(_: FastAPI):
     material_search.index()
     if partners_available():
         partner_search.index()
+        # duplicate overview over all partners in the background (about 20 s), the first call then answers at once
+        threading.Thread(target=partner_duplicates.all_pairs, name="duplicate-overview", daemon=True).start()
     else:
         log.warning("Keine Geschäftspartnerdaten in %s - Geschäftspartnersuche deaktiviert", config.PARTNER_INPUT_DIR)
     yield

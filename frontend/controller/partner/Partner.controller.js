@@ -11,8 +11,9 @@ sap.ui.define([
   "sap/m/Column",
   "sap/m/ColumnListItem",
   "sap/m/ScrollContainer",
-  "fis/mdsa/controller/api"
-], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, api) => {
+  "fis/mdsa/controller/api",
+  "fis/mdsa/controller/SapDialog"
+], (Controller, History, JSONModel, MessageBox, MessageToast, Label, Text, Panel, Table, Column, ColumnListItem, ScrollContainer, api, SapDialog) => {
   "use strict";
 
   // German labels of the G000 fields (the rest is shown with its technical name)
@@ -33,18 +34,22 @@ sap.ui.define([
   const isArray = (v) => Array.isArray(v);
 
   return Controller.extend("fis.mdsa.controller.partner.Partner", {
+    ...SapDialog,
+
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "p");
-      this.getView().setModel(new JSONModel({ candidates: null, busy: false }), "d");
+      this.getView().setModel(new JSONModel({ candidates: null, shown: null, showAll: false, busy: false }), "d");
       this.getOwnerComponent().getRouter().getRoute("partner").attachPatternMatched(this.onRouteMatched, this);
       api("api/partners/tables").then((labels) => { this.tableLabels = labels; }).catch(() => { this.tableLabels = {}; });
     },
 
     async onRouteMatched(event) {
-      const partner = event.getParameter("arguments").partner;
+      const args = event.getParameter("arguments");
+      const partner = args.partner;
+      this.showDuplicates = (args["?query"] || {}).section === "dubletten";   // from the duplicate overview
       const p = this.getView().getModel("p");
       p.setData({ partner, busy: true });
-      this.getView().getModel("d").setData({ candidates: null, busy: true, assessment: null });
+      this.getView().getModel("d").setData({ candidates: null, shown: null, showAll: false, busy: true, assessment: null });
       this.byId("page").setSelectedSection(null);
       this.partner = partner;
       try {
@@ -69,7 +74,11 @@ sap.ui.define([
       try {
         const result = await api(`api/partners/${encodeURIComponent(partner)}/duplicates`);
         if (partner === this.partner) {
-          d.setData({ ...result, busy: false, assessment: null });
+          d.setData({ ...result, showAll: false, busy: false, assessment: null });
+          this.updateShownCandidates();
+          if (this.showDuplicates) {
+            setTimeout(() => this.onScrollToDuplicates(), 0);
+          }
         }
       } catch (e) {
         d.setProperty("/busy", false);
@@ -80,7 +89,7 @@ sap.ui.define([
     async onAssess() {
       const d = this.getView().getModel("d");
       const partner = this.partner;
-      const candidates = d.getProperty("/candidates").map((c) => c.partner);
+      const candidates = d.getProperty("/shown").map((c) => c.partner);
       d.setProperty("/busy", true);
       try {
         const assessment = await api(`api/partners/${encodeURIComponent(partner)}/duplicates/assess`, { candidates });
@@ -91,11 +100,33 @@ sap.ui.define([
         d.setProperty("/candidates", d.getProperty("/candidates").map((c) => ({ ...c, verdict: verdicts[c.partner] || null })));
         d.setProperty("/assessment", assessment);
         d.setProperty("/duplicateFound", assessment.verdicts.some((v) => v.verdict === "Dublette" || v.verdict === "Mögliche Dublette"));
+        this.updateShownCandidates();
       } catch (e) {
         MessageBox.error(`KI-Bewertung fehlgeschlagen: ${e.message}`);
       } finally {
         d.setProperty("/busy", false);
       }
+    },
+
+    // by default only relevant candidates (high similarity or strong shared key) that the LLM did not rate as unrelated
+    updateShownCandidates() {
+      const d = this.getView().getModel("d");
+      const candidates = d.getProperty("/candidates") || [];
+      const relevant = candidates.filter((c) => c.relevant && c.verdict?.verdict !== "Verschieden");
+      d.setProperty("/relevantCount", relevant.length);
+      d.setProperty("/shown", d.getProperty("/showAll") ? candidates : relevant);
+    },
+
+    onToggleAllCandidates() {
+      const d = this.getView().getModel("d");
+      d.setProperty("/showAll", !d.getProperty("/showAll"));
+      this.updateShownCandidates();
+    },
+
+    // --- send the partner to SAP (shared dialog, see controller/SapDialog.js) ---
+    onOpenSapDialog() {
+      this.openSapDialog({ path: `api/partners/${encodeURIComponent(this.partner)}/xml`, object: "partner",
+        label: `Geschäftspartner ${this.partner}`, subject: "Der Geschäftspartner", file: `partner_${this.partner}` });
     },
 
     onScrollToDuplicates() {

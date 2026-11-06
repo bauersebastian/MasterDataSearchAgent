@@ -1,0 +1,115 @@
+<mvc:View controllerName="fis.mdsa.controller.partner.Duplicates"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:f="sap.f" xmlns:core="sap.ui.core" height="100%">
+  <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" headerPinned="true" fitContent="false">
+    <f:title>
+      <f:DynamicPageTitle>
+        <f:breadcrumbs>
+          <Breadcrumbs currentLocationText="Dublettenübersicht">
+            <Link text="Geschäftspartnersuche" press=".onBack"/>
+          </Breadcrumbs>
+        </f:breadcrumbs>
+        <f:heading>
+          <HBox alignItems="Center">
+            <core:Icon src="sap-icon://compare" size="1.5rem" class="sapUiSmallMarginEnd"/>
+            <Title text="Dublettenübersicht Geschäftspartner" wrapping="true"/>
+          </HBox>
+        </f:heading>
+        <f:actions>
+          <Button text="CSV-Export" icon="sap-icon://excel-attachment" type="Transparent" press=".onExport"
+            enabled="{= ${o>/shown}.length > 0 }"/>
+          <Button text="Neu berechnen" icon="sap-icon://refresh" type="Transparent" press=".onRefresh"
+            tooltip="Kandidaten aller Partner neu ermitteln (z. B. nach dem Aufbau des Vektorindex)"/>
+          <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+          <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
+        </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
+
+    <f:header>
+      <f:DynamicPageHeader pinnable="false">
+        <VBox>
+          <FlexBox wrap="Wrap" alignItems="Center">
+            <SegmentedButton selectedKey="{o>/maxTier}" selectionChange=".onTierChange" class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+              <items>
+                <SegmentedButtonItem key="1" text="Starker Schlüssel" icon="sap-icon://key"
+                  tooltip="Gleiche Steuernummer, IBAN, Identifikationsnummer, Geburtsdatum oder Kunde/Lieferant verweisen aufeinander"/>
+                <SegmentedButtonItem key="2" text="+ Gleiche Adresse" icon="sap-icon://addresses"
+                  tooltip="Zusätzlich: ähnlicher Name an derselben Adresse"/>
+                <SegmentedButtonItem key="3" text="+ Ähnlicher Name" icon="sap-icon://text"
+                  tooltip="Zusätzlich: ähnlicher Name ohne gemeinsame Adresse (oft auch Niederlassungen)"/>
+                <SegmentedButtonItem key="4" text="+ Nur semantisch" icon="sap-icon://learning-assistant"
+                  tooltip="Zusätzlich: nur über die Embeddings ähnlich - viele Fehltreffer"/>
+              </items>
+            </SegmentedButton>
+            <CheckBox text="Gelöschte einbeziehen" selected="{o>/includeDeleted}" select=".onTierChange"
+              class="sapUiSmallMarginEnd sapUiTinyMarginBottom"/>
+            <CheckBox text="Nur gleicher Name" selected="{o>/sameNameOnly}" select=".applyFilter"
+              tooltip="Paare mit gemeinsamem Schlüssel, aber abweichendem Namen (meist Datenfehler) ausblenden"
+              class="sapUiSmallMarginEnd sapUiTinyMarginBottom"/>
+            <SearchField value="{o>/filter}" liveChange=".applyFilter" search=".applyFilter" width="20rem"
+              placeholder="Gruppen filtern - Name, Partnernummer, Ort" class="sapUiTinyMarginBottom"/>
+          </FlexBox>
+          <Text class="mdsaStatus" text="{o>/info}"/>
+        </VBox>
+      </f:DynamicPageHeader>
+    </f:header>
+
+    <f:content>
+      <VBox>
+        <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+          visible="{= !!${o>/result} &amp;&amp; !${o>/result/semantic_available} }"
+          text="Der Vektorindex der Geschäftspartner ist leer - Kandidaten nur über Name, Adresse und Schlüssel."/>
+        <Table id="groups" items="{path: 'o>/shown', templateShareable: false}" growing="true" growingThreshold="25"
+          growingScrollToLoad="true" busy="{o>/busy}" busyIndicatorDelay="0" sticky="ColumnHeaders,HeaderToolbar"
+          noDataText="{= ${o>/busy} ? 'Kandidaten werden für alle Partner ermittelt …' : 'Keine Dubletten gefunden' }"
+          popinLayout="GridSmall">
+          <headerToolbar>
+            <OverflowToolbar>
+              <Title text="Dublettengruppen ({= ${o>/shown}.length })" level="H2"/>
+              <ToolbarSpacer/>
+              <Text text="Ein Klick auf einen Partner öffnet seine Dublettenprüfung (mit KI-Bewertung)." class="mdsaStatus"/>
+            </OverflowToolbar>
+          </headerToolbar>
+          <columns>
+            <Column width="12rem"><Text text="Evidenz"/></Column>
+            <Column><Text text="Partner"/></Column>
+            <Column minScreenWidth="Tablet" demandPopin="true" width="22rem"><Text text="Signale"/></Column>
+            <Column hAlign="End" width="8rem"><Text text="Ähnlichkeit"/></Column>
+          </columns>
+          <items>
+            <ColumnListItem vAlign="Top"
+              highlight="{= ${o>tier} === 1 ? 'Error' : ${o>tier} === 2 ? 'Warning' : ${o>tier} === 3 ? 'Information' : 'None' }">
+              <VBox>
+                <ObjectStatus text="{o>tier_text}" inverted="true"
+                  state="{= ${o>tier} === 1 ? 'Error' : ${o>tier} === 2 ? 'Warning' : ${o>tier} === 3 ? 'Information' : 'None' }"/>
+                <Text text="{= ${o>size} + ' Partner' + (${o>pairs}.length > 1 ? ' · ' + ${o>pairs}.length + ' Paare' : '') }"
+                  class="mdsaStatus sapUiTinyMarginTop"/>
+                <ObjectStatus visible="{= !!${o>name_differs} }" text="abweichender Name – Schlüssel prüfen"
+                  state="Warning" icon="sap-icon://warning" class="sapUiTinyMarginTop"/>
+              </VBox>
+              <VBox items="{path: 'o>partners', templateShareable: false}">
+                <HBox alignItems="Center" wrap="Wrap" class="mdsaDupPartner">
+                  <Link text="{o>partner}" press=".onPartnerPress" class="sapUiTinyMarginEnd" width="7rem"/>
+                  <core:Icon src="{= ${o>type} === '1' ? 'sap-icon://person-placeholder' : ${o>type} === '3' ? 'sap-icon://group' : 'sap-icon://building' }"
+                    tooltip="{o>type_text}" class="sapUiTinyMarginEnd"/>
+                  <Text text="{o>name}" class="sapUiTinyMarginEnd" wrapping="false"/>
+                  <Text text="{= ${o>address} ? '· ' + ${o>address} : '' }" class="mdsaStatus sapUiTinyMarginEnd" wrapping="false"/>
+                  <HBox items="{path: 'o>roles', templateShareable: false}" class="mdsaBadges">
+                    <ObjectStatus text="{o>}" state="{= ${o>} === 'Kunde' ? 'Indication06' : ${o>} === 'Lieferant' ? 'Indication07' : 'Information' }" class="sapUiTinyMarginEnd"/>
+                  </HBox>
+                  <ObjectStatus visible="{= !!${o>deleted} }" text="Löschvormerkung" state="Error"/>
+                </HBox>
+              </VBox>
+              <HBox wrap="Wrap" class="mdsaBadges" items="{path: 'o>signals', templateShareable: false}">
+                <ObjectStatus text="{o>}" state="{= ${o>} === 'gleiche Adresse' ? 'Warning' : 'Error' }" inverted="true"
+                  icon="sap-icon://chain-link" class="sapUiTinyMarginEnd"/>
+              </HBox>
+              <ProgressIndicator percentValue="{o>score}" displayValue="{o>score} %" height="1.25rem"
+                state="{= ${o>score} >= 90 ? 'Error' : ${o>score} >= 75 ? 'Warning' : 'None' }"/>
+            </ColumnListItem>
+          </items>
+        </Table>
+      </VBox>
+    </f:content>
+  </f:DynamicPage>
+</mvc:View>
