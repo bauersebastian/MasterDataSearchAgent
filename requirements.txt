@@ -2,7 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 openai>=1.99
 pydantic>=2
-chromadb>=1.0
+chromadb==1.5.9
 rapidfuzz>=3
 python-dotenv
 requests
