@@ -249,7 +249,7 @@ response still carries `service` (and `error` for failed areas), and failures ar
    *Verwandt* and *Verschieden* are excluded (the user can include them again; after changing the kept partner the
    assessment can be repeated against it). Suggested: not deleted / blocked, customer and vendor, most info records, contacts, sales areas and
    purchasing organisations. Partners that are no duplicate can be excluded. Sales areas (GKVP) or purchasing
-   organisations (GLT3) of the others that the kept partner lacks are shown as a hint (they can be created in the add-on).
+   organisations (GLT3) of the others that the kept partner lacks are shown as a hint (they can be created with FIS/mpm).
 2. **Treat the others** – deletion check per partner (live, cached for `MDSA_MERGE_CHECK_MAX_AGE`). Options:
    *Löschvormerkung* only without open documents (validated again on the server before sending), *zentrale Sperre*,
    *Kundensperre*, *Lieferantensperre*.
@@ -257,11 +257,11 @@ response still carries `service` (and `error` for failed areas), and failures ar
    founding date or birth date, standard address as a whole) and the communication, bank, tax and id entries the kept
    partner lacks, and their relationships (contact persons, ...); the LLM picks the best value / decides what to take over (without `OPENAI_API_KEY`: the kept
    partner's values, missing ones from the others). A missing customer / vendor role is taken over from another partner.
-4. **Review and send** – changes, warnings and the DXTO message; *An FIS/mpm senden* sends it to the staging table of the add-on, where it is
+4. **Review and send** – changes, warnings and the DXTO message; *An FIS/mpm senden* sends it to the staging table of FIS/mpm, where it is
    approved and posted. Every send is logged in SQLite (`MDSA_MERGE_DB`, default `data/merges.sqlite`) with the
    extract timestamp; the overview marks the group as sent until a new extract arrives.
 
-Import rules of the add-on that the message follows:
+Import rules of FIS/mpm that the message follows:
 
 | What | Rows sent |
 |---|---|
@@ -269,7 +269,7 @@ Import rules of the add-on that the message follows:
 | New communication entries | GAD2 / GAD3 / GAD6 / GADU on the kept standard address, `CONSNUMBER` 900, 901, … |
 | New bank account / id / tax | G0BK with `BKVID` 9000, 9001, …; G0ID (`TYPE` + `IDNUMBER`); GTAX (`TAXTYPE`) |
 | New standard address (kept partner without one) | GADC + G021 with `ADDRNUMBER` 9000000000 |
-| Customer / vendor role of another partner | G100 rows FLCU00/FLCU01 or FLVN00/FLVN01, GKA1 / GLA1 copied with empty `KUNNR` / `LIFNR` (the add-on numbers it) and without deletion / block flags |
+| Customer / vendor role of another partner | G100 rows FLCU00/FLCU01 or FLVN00/FLVN01, GKA1 / GLA1 copied with empty `KUNNR` / `LIFNR` (FIS/mpm numbers it) and without deletion / block flags |
 | Deletion flag | G000 `XDELE` (archiving flag), GKA1 / GLA1 `LOEVM` |
 | Central block | G000 `XBLCK` |
 | Customer block | GKA1 `SPERR` = X, `AUFSD` / `LIFSD` / `FAKSD` / `CASSD` = `MDSA_MERGE_*_BLOCK` (default 01, 01, 01, not set) |
@@ -277,7 +277,7 @@ Import rules of the add-on that the message follows:
 
 | Relationship moved to the kept partner | G050 + GRAC / GRA2 / GRA3 / GRA6 with `LFDNR` 900, …; the address number is the kept partner's standard address if it was the other partner's own (organisation side), otherwise unchanged (it is the organisation's address); the old relationship is sent with `XDELE` = X |
 
-Temporary keys start with 9 followed by zeros of the field length; the add-on assigns the real numbers when posting.
+Temporary keys start with 9 followed by zeros of the field length; FIS/mpm assigns the real numbers when posting.
 `XDELE` is only part of a table's header when a row of that table is deleted (in G000 it is the archiving flag). The
 `*FS` columns (`ADDRFS`, `PARTNERFS2`, `KTOFS`) are meant for completely new partners and stay empty.
 

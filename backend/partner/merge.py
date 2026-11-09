@@ -2,15 +2,15 @@
 
 The kept partner is updated with the best data of the others (name, address, communication, bank, tax, ids, missing
 customer / vendor role), the others get a deletion flag or blocks. The result is one DXTO import message (staging
-table of the FIS add-on); it is reviewed, approved and posted to SAP in the add-on, the app only logs what it sent.
+table of FIS/mpm); it is reviewed, approved and posted to SAP in FIS/mpm, the app only logs what it sent.
 
-Rules of the add-on import:
+Rules of the FIS/mpm import:
 - complete rows: every column of a table is sent, an empty value clears the field in SAP ("/" = leave unchanged);
 - a new row whose key is a number gets a temporary key 9..0 of the field length (CONSNUMBER 900, BKVID 9000,
-  ADDRNUMBER 9000000000), counting up; the add-on assigns the real number when posting;
-- a new customer / vendor for an existing partner: KUNNR / LIFNR empty, the add-on numbers it internally;
+  ADDRNUMBER 9000000000), counting up; FIS/mpm assigns the real number when posting;
+- a new customer / vendor for an existing partner: KUNNR / LIFNR empty, FIS/mpm numbers it internally;
 - deletion: archiving flag BUT000-XDELE (G000) and deletion flag KNA1 / LFA1-LOEVM (GKA1 / GLA1). XDELE in the other
-  tables marks a row for deletion in the add-on; it is used to remove a relationship that is moved to the kept
+  tables marks a row for deletion in FIS/mpm; it is used to remove a relationship that is moved to the kept
   partner (the XDELE column is only sent in a table that has such a row);
 - the *FS columns (ADDRFS, PARTNERFS2, KTOFS) are for completely new business partners and stay empty."""
 import json
@@ -508,7 +508,7 @@ def build(ids: list[str], keep_id: str, choices: dict[str, str], take: list[str]
         else:
             plan.add(keep, table, row, "Neu", f"{item['label']} {item['text']} von {source.id}")
 
-    # --- kept partner: customer / vendor role of another partner (new number assigned by the add-on)
+    # --- kept partner: customer / vendor role of another partner (new number assigned by FIS/mpm)
     for key, table, roles, number_field, flags, label in (
             ("customer", "GKA1", CUSTOMER_ROLES, "KUNNR", CUSTOMER_FLAGS, "Kunde"),
             ("vendor", "GLA1", VENDOR_ROLES, "LIFNR", VENDOR_FLAGS, "Lieferant")):
@@ -524,13 +524,13 @@ def build(ids: list[str], keep_id: str, choices: dict[str, str], take: list[str]
                          f"Rolle {r['RLTYP']}")
         row = {**p.table(table)[0], number_field: "", **{f: "" for f in flags}}
         old_number = p.kunnr if key == "customer" else p.lifnr
-        plan.add(keep, table, row, "Neu", f"{label} (neue Nummer vom Add-on) mit den Daten von {label} {old_number}")
+        plan.add(keep, table, row, "Neu", f"{label} (neue Nummer von FIS/mpm) mit den Daten von {label} {old_number}")
         if key == "customer" and sales_areas(p):
             warnings.append(f"Die Vertriebsbereiche von Kunde {old_number} ({', '.join(sales_areas(p))}) sind nicht "
-                            "im Extrakt - bitte im Add-on für den neuen Kunden anlegen.")
+                            "im Extrakt - bitte in FIS/mpm für den neuen Kunden anlegen.")
         if key == "vendor" and purchasing_orgs(p):
             warnings.append(f"Die Einkaufsorganisationen von Lieferant {old_number} ({', '.join(purchasing_orgs(p))}) "
-                            "sind nicht im Extrakt - bitte im Add-on für den neuen Lieferanten anlegen.")
+                            "sind nicht im Extrakt - bitte in FIS/mpm für den neuen Lieferanten anlegen.")
 
     # organisations of the others that the kept partner does not have
     own_areas, own_orgs = set(sales_areas(keep)), set(purchasing_orgs(keep))
@@ -538,10 +538,10 @@ def build(ids: list[str], keep_id: str, choices: dict[str, str], take: list[str]
     missing_orgs = sorted({o for p in others for o in purchasing_orgs(p)} - own_orgs)
     if keep.customer and missing_areas:
         warnings.append(f"Vertriebsbereiche der anderen Partner fehlen beim behaltenen Partner: "
-                        f"{', '.join(missing_areas)} - ggf. im Add-on anlegen.")
+                        f"{', '.join(missing_areas)} - ggf. mit FIS/mpm anlegen.")
     if keep.vendor and missing_orgs:
         warnings.append(f"Einkaufsorganisationen der anderen Partner fehlen beim behaltenen Partner: "
-                        f"{', '.join(missing_orgs)} - ggf. im Add-on anlegen.")
+                        f"{', '.join(missing_orgs)} - ggf. mit FIS/mpm anlegen.")
     left = [i for k, i in items.items() if i["table"] == "G050" and k not in take]
     if left:
         warnings.append(f"{len(left)} Beziehung(en) der anderen Partner werden nicht übernommen: "
@@ -601,7 +601,7 @@ def move_relation(plan: "Plan", keep: Partner, source: Partner, key: str, addres
                   used: dict[str, set[str]]) -> None:
     """New relationship of the kept partner with the data of the source's relationship (G050 + address and
     communication GRAC / GRA2 / GRA3 / GRA6, linked by PARTNER2 + RELTYP + DIRECTION + LFDNR); the old one is marked
-    for deletion (XDELE). LFDNR of the new one: temporary key 900, ... (the add-on numbers it).
+    for deletion (XDELE). LFDNR of the new one: temporary key 900, ... (FIS/mpm numbers it).
     The address of a relationship is the organisation's: if it is the source's own address, the kept partner's
     standard address is used, otherwise (the source is the person) it stays."""
     old_key = tuple(key.split(":")[1:5])

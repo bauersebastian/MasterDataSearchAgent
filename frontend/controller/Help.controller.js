@@ -176,7 +176,7 @@ sap.ui.define([
           Vorschlag ist der Partner ohne Löschvormerkung/Sperre, der Kunde und
           Lieferant ist und die meisten Infosätze, Ansprechpartner und Organisationen hat. Partner, die keine Dublette
           sind, lassen sich abwählen. Fehlen dem behaltenen Partner Vertriebsbereiche oder Einkaufsorganisationen der
-          anderen, erscheint ein Hinweis – sie können im Add-on angelegt werden.</li>
+          anderen, erscheint ein Hinweis – sie können mit FIS/mpm angelegt werden.</li>
           <li><strong>Dubletten behandeln:</strong> für jeden anderen Partner läuft die Löschprüfung live in SAP.
           Ohne offene Belege ist die <em>Löschvormerkung</em> vorbelegt (Archivierungsvormerkung des Partners und
           Löschvormerkung von Kunde/Lieferant); mit offenen Belegen ist sie gesperrt und es bleiben die
@@ -185,9 +185,9 @@ sap.ui.define([
           <li><strong>Beste Werte:</strong> die KI wählt je abweichendem Datum (Name, Suchbegriffe, Rechtsform, Sprache,
           Standardadresse, …) den besten Wert und schlägt Telefon, Fax, E-Mail, Webseite, Bankverbindungen, Steuer- und
           Identifikationsnummern der anderen zur Übernahme vor. Ist der behaltene Partner kein Kunde oder Lieferant, wird
-          die Rolle eines anderen übernommen; die neue Nummer vergibt das Add-on. Alles lässt sich ändern.</li>
+          die Rolle eines anderen übernommen; die neue Nummer vergibt FIS/mpm. Alles lässt sich ändern.</li>
           <li><strong>Prüfen und senden:</strong> zeigt alle Änderungen und die Importnachricht. <em>An FIS/mpm senden</em>
-          stellt sie in die Staging-Tabelle des Add-ons; Prüfung, Freigabe und Buchung erfolgen dort. Jede Sendung wird
+          stellt sie in die Staging-Tabelle von FIS/mpm; Prüfung, Freigabe und Buchung erfolgen dort. Jede Sendung wird
           protokolliert (<em>Protokoll</em>); die Gruppe ist in der Übersicht als gesendet markiert, bis der nächste
           Extrakt die Partner nicht mehr als Dubletten enthält.</li>
         </ol>

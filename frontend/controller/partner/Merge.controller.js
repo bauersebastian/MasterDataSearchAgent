@@ -17,7 +17,7 @@ sap.ui.define([
   const STEPS = ["stepKeep", "stepActions", "stepValues", "stepSend"];
 
   // Golden record wizard: one duplicate group -> keep one partner, take over the best data of the others, flag the
-  // others for deletion / block them; the result goes to the DXTO staging table of the add-on and is logged
+  // others for deletion / block them; the result goes to the DXTO staging table of FIS/mpm and is logged
   return Controller.extend("fis.mdsa.controller.partner.Merge", {
     onInit() {
       this.model = new JSONModel({ partners: [] });
@@ -131,16 +131,16 @@ sap.ui.define([
         const areas = missing("sales_areas");
         const orgs = missing("purchasing_orgs");
         if (areas.length) {
-          hints.push(`Vertriebsbereiche der anderen fehlen beim behaltenen Partner: ${areas.join(", ")} – bei Bedarf im Add-on anlegen.`);
+          hints.push(`Vertriebsbereiche der anderen fehlen beim behaltenen Partner: ${areas.join(", ")} – bei Bedarf mit FIS/mpm anlegen.`);
         }
         if (orgs.length) {
-          hints.push(`Einkaufsorganisationen der anderen fehlen beim behaltenen Partner: ${orgs.join(", ")} – bei Bedarf im Add-on anlegen.`);
+          hints.push(`Einkaufsorganisationen der anderen fehlen beim behaltenen Partner: ${orgs.join(", ")} – bei Bedarf mit FIS/mpm anlegen.`);
         }
         if (!keep.has_customer && others.some((p) => p.has_customer)) {
-          hints.push("Der behaltene Partner ist kein Kunde: die Kundenrolle wird von einer Dublette übernommen (neue Kundennummer vom Add-on).");
+          hints.push("Der behaltene Partner ist kein Kunde: die Kundenrolle wird von einer Dublette übernommen (neue Kundennummer von FIS/mpm).");
         }
         if (!keep.has_vendor && others.some((p) => p.has_vendor)) {
-          hints.push("Der behaltene Partner ist kein Lieferant: die Lieferantenrolle wird von einer Dublette übernommen (neue Lieferantennummer vom Add-on).");
+          hints.push("Der behaltene Partner ist kein Lieferant: die Lieferantenrolle wird von einer Dublette übernommen (neue Lieferantennummer von FIS/mpm).");
         }
         if (keep.deleted || keep.blocks.length) {
           hints.push(`Der behaltene Partner ${keep.partner} ist gelöscht oder gesperrt.`);
