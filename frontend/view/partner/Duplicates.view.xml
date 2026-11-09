@@ -75,6 +75,7 @@
             <Column><Text text="Partner"/></Column>
             <Column minScreenWidth="Tablet" demandPopin="true" width="22rem"><Text text="Signale"/></Column>
             <Column hAlign="End" width="8rem"><Text text="Ähnlichkeit"/></Column>
+            <Column hAlign="End" width="11rem"><Text text="Golden Record"/></Column>
           </columns>
           <items>
             <ColumnListItem vAlign="Top"
@@ -106,6 +107,13 @@
               </HBox>
               <ProgressIndicator percentValue="{o>score}" displayValue="{o>score} %" height="1.25rem"
                 state="{= ${o>score} >= 90 ? 'Error' : ${o>score} >= 75 ? 'Warning' : 'None' }"/>
+              <VBox alignItems="End">
+                <Button text="Zusammenführen" icon="sap-icon://combine" press=".onMerge"
+                  tooltip="Assistent: einen Partner behalten, beste Daten übernehmen, die anderen löschen oder sperren"/>
+                <ObjectStatus visible="{= !!${o>merge} }" state="Success" icon="sap-icon://upload-to-cloud" class="sapUiTinyMarginTop"
+                  text="{= ${o>merge} ? 'gesendet, behalten ' + ${o>merge/keep} : '' }"
+                  tooltip="An DXTO gesendet - verschwindet mit dem nächsten Extrakt"/>
+              </VBox>
             </ColumnListItem>
           </items>
         </Table>

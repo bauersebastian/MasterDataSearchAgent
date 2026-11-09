@@ -163,6 +163,32 @@ sap.ui.define([
         <p>Ein Klick auf eine Partnernummer öffnet die Detailseite im Abschnitt <em>Dubletten</em>; dort lässt sich der
         Partner einzeln per <em>KI-Bewertung</em> prüfen. <em>CSV-Export</em> speichert die angezeigten Gruppen (eine Zeile je
         Partner), <em>Neu berechnen</em> ermittelt die Kandidaten neu.</p>`
+    },
+    {
+      title: "Golden Record – Dubletten zusammenführen",
+      html: `<p><em>Zusammenführen</em> in der Dublettenübersicht öffnet für eine Gruppe einen Assistenten in vier Schritten:</p>
+        <ol>
+          <li><strong>Partner behalten:</strong> Vorschlag ist der Partner ohne Löschvormerkung/Sperre, der Kunde und
+          Lieferant ist und die meisten Infosätze, Ansprechpartner und Organisationen hat. Partner, die keine Dublette
+          sind, lassen sich abwählen. Fehlen dem behaltenen Partner Vertriebsbereiche oder Einkaufsorganisationen der
+          anderen, erscheint ein Hinweis – sie können im Add-on angelegt werden.</li>
+          <li><strong>Dubletten behandeln:</strong> für jeden anderen Partner läuft die Löschprüfung live in SAP.
+          Ohne offene Belege ist die <em>Löschvormerkung</em> vorbelegt (Archivierungsvormerkung des Partners und
+          Löschvormerkung von Kunde/Lieferant); mit offenen Belegen ist sie gesperrt und es bleiben die
+          <em>zentrale Sperre</em>, die <em>Kundensperre</em> (Buchungs-, Auftrags-, Liefer-, Fakturasperre) und die
+          <em>Lieferantensperre</em> (Buchungs- und Einkaufssperre).</li>
+          <li><strong>Beste Werte:</strong> die KI wählt je abweichendem Datum (Name, Suchbegriffe, Rechtsform, Sprache,
+          Standardadresse, …) den besten Wert und schlägt Telefon, Fax, E-Mail, Webseite, Bankverbindungen, Steuer- und
+          Identifikationsnummern der anderen zur Übernahme vor. Ist der behaltene Partner kein Kunde oder Lieferant, wird
+          die Rolle eines anderen übernommen; die neue Nummer vergibt das Add-on. Alles lässt sich ändern.</li>
+          <li><strong>Prüfen und senden:</strong> zeigt alle Änderungen und die Importnachricht. <em>An DXTO senden</em>
+          stellt sie in die Staging-Tabelle des Add-ons; Prüfung, Freigabe und Buchung erfolgen dort. Jede Sendung wird
+          protokolliert (<em>Protokoll</em>); die Gruppe ist in der Übersicht als gesendet markiert, bis der nächste
+          Extrakt die Partner nicht mehr als Dubletten enthält.</li>
+        </ol>
+        <p><strong>Beziehungen</strong> (z. B. Ansprechpartner) der anderen Partner erscheinen in Schritt 3 ebenfalls zur
+        Übernahme: sie werden als neue Beziehung beim behaltenen Partner angelegt, die alte wird zur Löschung markiert.
+        Nicht übernommene Beziehungen nennt der letzte Schritt.</p>`
     }
   ];
 

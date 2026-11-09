@@ -236,6 +236,45 @@ activation of all services above there are none left; the lists `NOT_AVAILABLE_C
 warnings never block. The dialog shows business texts only – no service names or SAP error messages; the
 response still carries `service` (and `error` for failed areas), and failures are logged with service and SAP message.
 
+## Golden record (merge duplicates)
+
+*Zusammenführen* on a group of the duplicate overview opens a wizard (`#/golden-record/<p1>,<p2>,...`,
+`backend/partner/merge.py`) for one group at a time:
+
+1. **Keep** – suggested: not deleted / blocked, customer and vendor, most info records, contacts, sales areas and
+   purchasing organisations. Partners that are no duplicate can be excluded. Sales areas (GKVP) or purchasing
+   organisations (GLT3) of the others that the kept partner lacks are shown as a hint (they can be created in the add-on).
+2. **Treat the others** – deletion check per partner (live, cached for `MDSA_MERGE_CHECK_MAX_AGE`). Options:
+   *Löschvormerkung* only without open documents (validated again on the server before sending), *zentrale Sperre*,
+   *Kundensperre*, *Lieferantensperre*.
+3. **Best values** – attribute groups that differ (name, search terms, title, language, external number, legal form /
+   founding date or birth date, standard address as a whole) and the communication, bank, tax and id entries the kept
+   partner lacks, and their relationships (contact persons, ...); the LLM picks the best value / decides what to take over (without `OPENAI_API_KEY`: the kept
+   partner's values, missing ones from the others). A missing customer / vendor role is taken over from another partner.
+4. **Review and send** – changes, warnings and the DXTO message; sent to the staging table of the add-on, where it is
+   approved and posted. Every send is logged in SQLite (`MDSA_MERGE_DB`, default `data/merges.sqlite`) with the
+   extract timestamp; the overview marks the group as sent until a new extract arrives.
+
+Import rules of the add-on that the message follows:
+
+| What | Rows sent |
+|---|---|
+| Changed data of the kept partner | complete rows (all columns; empty clears the field, `/` would leave it unchanged): G000, GADC with the existing `ADDRNUMBER`, GTAX with the existing `TAXTYPE` |
+| New communication entries | GAD2 / GAD3 / GAD6 / GADU on the kept standard address, `CONSNUMBER` 900, 901, … |
+| New bank account / id / tax | G0BK with `BKVID` 9000, 9001, …; G0ID (`TYPE` + `IDNUMBER`); GTAX (`TAXTYPE`) |
+| New standard address (kept partner without one) | GADC + G021 with `ADDRNUMBER` 9000000000 |
+| Customer / vendor role of another partner | G100 rows FLCU00/FLCU01 or FLVN00/FLVN01, GKA1 / GLA1 copied with empty `KUNNR` / `LIFNR` (the add-on numbers it) and without deletion / block flags |
+| Deletion flag | G000 `XDELE` (archiving flag), GKA1 / GLA1 `LOEVM` |
+| Central block | G000 `XBLCK` |
+| Customer block | GKA1 `SPERR` = X, `AUFSD` / `LIFSD` / `FAKSD` / `CASSD` = `MDSA_MERGE_*_BLOCK` (default 01, 01, 01, not set) |
+| Vendor block | GLA1 `SPERR`, `SPERM` = X |
+
+| Relationship moved to the kept partner | G050 + GRAC / GRA2 / GRA3 / GRA6 with `LFDNR` 900, …; the address number is the kept partner's standard address if it was the other partner's own (organisation side), otherwise unchanged (it is the organisation's address); the old relationship is sent with `XDELE` = X |
+
+Temporary keys start with 9 followed by zeros of the field length; the add-on assigns the real numbers when posting.
+`XDELE` is only part of a table's header when a row of that table is deleted (in G000 it is the archiving flag). The
+`*FS` columns (`ADDRFS`, `PARTNERFS2`, `KTOFS`) are meant for completely new partners and stay empty.
+
 ## OpenAI endpoint
 
 As in the research agent, the default is the Azure OpenAI resource `https://fisg-openai-valuestream-aoi.openai.azure.com/`
@@ -260,6 +299,13 @@ to use api.openai.com instead.
 | GET | `/api/partners/suggest?q=` | – | up to 8 suggestions |
 | GET | `/api/partners/tables` | – | GPA table descriptions (objects.md) |
 | GET | `/api/partners/duplicates?max_tier=3&include_deleted=false&refresh=false` | – | duplicate groups over all partners (heuristic), pair counts per tier |
+| POST | `/api/partners/merge/proposal` | `{partners: [partner]}` | group with suggested `keep`, reasons, sales areas / purchasing orgs, earlier merges |
+| POST | `/api/partners/merge/deletion-check/{partner}?refresh=false` | – | deletion check (cached for the validation before sending) |
+| POST | `/api/partners/merge/advice` | `{partners, keep}` | differing attribute `groups` and list `items` with the LLM's choice |
+| POST | `/api/partners/merge/preview` | `{partners, keep, choices: {group: partner}, take: [item key], actions: {partner: [delete\|central_block\|customer_block\|vendor_block]}}` | `changes`, `warnings`, `tables`, `xml` |
+| POST | `/api/partners/merge/send` | as preview | validates, sends to DXTO, logs: preview + `result`, `log_id` |
+| GET | `/api/partners/merge/log?partner=` | – | logged merges, newest first |
+| GET | `/api/partners/merge/log/{id}` | – | one log entry with message and SAP response |
 | GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
 | GET | `/api/partners/{partner}/xml` | – | SOAP message of the partner, tables, endpoint, variant |
 | POST | `/api/partners/{partner}/deletion-check` | – | open documents blocking the deletion: `verdict` (blocked / incomplete / ok), `checks` with documents |

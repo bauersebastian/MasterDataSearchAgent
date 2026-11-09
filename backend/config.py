@@ -70,6 +70,18 @@ KEY_FIELD = os.getenv("SAP_KEY_FIELD", "MATNR")
 PARTNER_KEY_FIELD = os.getenv("SAP_PARTNER_KEY_FIELD", "PARTNER")
 PARTNER_VARIANT = os.getenv("SAP_PARTNER_VARIANT", "BRUNO_GPA")
 
+# --- Golden record (merge of duplicate business partners) -------------------
+# log of the merges sent to DXTO (SQLite)
+MERGE_DB = Path(os.getenv("MDSA_MERGE_DB", APP_DIR / "data" / "merges.sqlite"))
+# block reasons set with the customer block (KNA1-AUFSD / LIFSD / FAKSD / CASSD); empty = field not set.
+# KNA1-SPERR (posting block) and for vendors LFA1-SPERR / SPERM are flags and always set.
+MERGE_ORDER_BLOCK = os.getenv("MDSA_MERGE_ORDER_BLOCK", "01")
+MERGE_DELIVERY_BLOCK = os.getenv("MDSA_MERGE_DELIVERY_BLOCK", "01")
+MERGE_BILLING_BLOCK = os.getenv("MDSA_MERGE_BILLING_BLOCK", "01")
+MERGE_SALES_BLOCK = os.getenv("MDSA_MERGE_SALES_BLOCK", "")
+# a deletion check older than this is repeated before the merge is sent
+MERGE_CHECK_MAX_AGE = int(os.getenv("MDSA_MERGE_CHECK_MAX_AGE", "3600"))   # seconds
+
 # --- SAP OData (live data, read only, same user) -----------------------------
 SAP_CLIENT = os.getenv("SAP_CLIENT", "100")
 # base URL of the OData services (standard APIs API_SALES_ORDER_SRV, API_SALES_QUOTATION_SRV, ...)

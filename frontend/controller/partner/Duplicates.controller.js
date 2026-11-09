@@ -89,6 +89,12 @@ sap.ui.define([
       this.getOwnerComponent().getRouter().navTo("partner", { partner, "?query": { section: "dubletten" } });
     },
 
+    // golden record wizard for the group
+    onMerge(event) {
+      const partners = event.getSource().getBindingContext("o").getProperty("partners").map((p) => p.partner);
+      this.getOwnerComponent().getRouter().navTo("partnerMerge", { partners: partners.join(",") });
+    },
+
     // one line per partner and group (semicolon separated, opens directly in Excel)
     onExport() {
       const header = ["Gruppe", "Evidenz", "Ähnlichkeit", "Signale", "Abweichender Name", "Partner", "Name", "Partnertyp",

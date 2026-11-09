@@ -29,6 +29,7 @@
         { "name": "material", "pattern": "material/{matnr}", "target": "material" },
         { "name": "partnerSearch", "pattern": "partner:?query:", "target": "partnerSearch" },
         { "name": "partnerDuplicates", "pattern": "dubletten", "target": "partnerDuplicates" },
+        { "name": "partnerMerge", "pattern": "golden-record/{partners}", "target": "partnerMerge" },
         { "name": "partner", "pattern": "partner/{partner}:?query:", "target": "partner" },
         { "name": "help", "pattern": "hilfe", "target": "help" }
       ],
@@ -37,6 +38,7 @@
         "material": { "id": "material", "name": "material.Material", "level": 2 },
         "partnerSearch": { "id": "partnerSearch", "name": "partner.Search", "level": 1 },
         "partnerDuplicates": { "id": "partnerDuplicates", "name": "partner.Duplicates", "level": 2 },
+        "partnerMerge": { "id": "partnerMerge", "name": "partner.Merge", "level": 3 },
         "partner": { "id": "partner", "name": "partner.Partner", "level": 3 },
         "help": { "id": "help", "name": "Help", "level": 2 }
       }
