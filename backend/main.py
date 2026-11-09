@@ -83,6 +83,11 @@ def run_search(req: SearchRequest) -> dict:
         raise openai_error(e) from e
 
 
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
+
+
 @app.get("/api/suggest")
 def get_suggestions(q: str = Query(..., min_length=1)) -> list[dict]:
     return search.suggest(q)

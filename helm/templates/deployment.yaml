@@ -53,17 +53,17 @@ spec:
                 name: {{ .Values.existingSecret }}
           startupProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
             periodSeconds: 5
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
