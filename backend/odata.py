@@ -1,5 +1,7 @@
 """Read access to SAP OData services (live data, read only): client, logon language, basic auth, paging."""
 import os
+import re
+from datetime import datetime, timezone
 from typing import Iterator
 
 import requests
@@ -52,6 +54,12 @@ def get_all(service: str, entity: str, params: dict) -> Iterator[dict]:
         if len(rows) < PAGE:
             return
         skip += PAGE
+
+
+def date(value: str | None) -> str:
+    """OData v2 date '/Date(1759795200000)/' -> '2025-10-07'."""
+    m = re.match(r"/Date\((-?\d+)", value or "")
+    return datetime.fromtimestamp(int(m.group(1)) / 1000, tz=timezone.utc).date().isoformat() if m else ""
 
 
 def quote(value: str) -> str:

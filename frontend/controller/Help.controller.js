@@ -117,13 +117,9 @@ sap.ui.define([
         (<code>G000</code>, <code>G100</code>, <code>GADC</code>, …) eine Kopfzeile mit den SAP-Feldnamen und eine Zeile je
         Datensatz, jede Zeile mit der Partnernummer als <code>PARTNER</code>. Vorher wird die XML-Nachricht angezeigt und
         eine Bestätigung abgefragt.</p>
-        <p><strong>Kundenaufträge</strong> (nur bei Partnern mit Kundenrolle): die offenen Kundenaufträge, in denen der
-        Kunde Auftraggeber ist – <em>live aus SAP</em> gelesen. Offen heißt: noch nicht oder nur teilweise geliefert und
-        nicht vollständig abgesagt. Angezeigt werden die Kopfdaten (Auftrag, Art, Bestellnummer des Kunden,
-        Wunschlieferdatum, Nettowert, Lieferstatus, Sperren), die neuesten zuerst.</p>
         <p><strong>Löschprüfung</strong> prüft auf Knopfdruck (nur lesend, live aus SAP), ob noch offene Belege den
         Partner verwenden – in <em>jeder</em> Partnerrolle (Auftraggeber, Warenempfänger, Rechnungsempfänger, Regulierer):
-        nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis), Fakturen, die noch nicht an die
+        nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis; vollständig abgelehnte Belege generell nur als Hinweis), Fakturen, die noch nicht an die
         Buchhaltung übergeben sind, Lieferungen ohne Warenausgang, nicht erledigte Kontrakte und Lieferpläne (abgelaufene
         nur als Hinweis), Retouren und Gutschriftsanforderungen, dazu offene Posten des Debitoren- bzw. Kreditorenkontos
         (FI, alle Buchungskreise, mit Saldo; Merkposten wie Anzahlungsanforderungen nur als Hinweis). Bereiche ohne

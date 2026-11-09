@@ -3,6 +3,8 @@ the standard OData APIs, on demand only. Areas whose API is not available are re
 as passed -- so the check never says "no obstacles" just because an API is missing.
 
 Checked (customer role):
+- sales documents below: fully rejected ones (rejection status C) only as a hint, they are effectively closed even
+  when the processing status is not C
 - sales orders not completed (overall processing status != C), the customer in any partner function
   (sold-to, ship-to, bill-to, payer, ...), header and item partners
 - sales quotations not completed, any partner function; expired quotations only as a warning
@@ -24,12 +26,12 @@ from datetime import date, datetime
 from .. import odata
 from ..tables import strip_zeros
 from .data import Partner
-from .orders import DELIVERY_STATUS, odata_date
 
 CHUNK = 40   # document numbers per filter (URL length)
 
 PARTNER_FUNCTIONS = {"AG": "Auftraggeber", "WE": "Warenempfänger", "RE": "Rechnungsempfänger", "RG": "Regulierer",
                      "AP": "Ansprechpartner", "VE": "Vertriebsmitarbeiter", "SP": "Spediteur", "ZM": "Zuständiger MA"}
+DELIVERY_STATUS = {"A": "nicht geliefert", "B": "teilweise geliefert", "C": "vollständig geliefert"}
 PROCESS_STATUS = {"A": "offen", "B": "in Arbeit", "C": "erledigt", "": "ohne Status"}
 TRANSFER_STATUS = {"": "Buchungsbeleg nicht erzeugt", "A": "für Übergabe an FI gesperrt",
                    "B": "nicht gebucht (Kontenfindungsfehler)", "F": "nicht gebucht (Preisfindungsfehler)",
@@ -44,6 +46,11 @@ NOT_AVAILABLE_VENDOR = [
 
 FI_SERVICE, FI_ENTITY = "API_OPLACCTGDOCITEMCUBE_SRV", "A_OperationalAcctgDocItemCube"
 SPECIAL_GL = {"A": "Anzahlung", "F": "Anzahlungsanforderung", "D": "Rabattrückstellung", "W": "Wechsel"}
+
+
+def rejected(row: dict) -> bool:
+    """Sales document fully rejected (all items with a reason for rejection)."""
+    return row.get("OverallSDDocumentRejectionSts") == "C"
 
 
 def same_number(a: str, b: str) -> bool:
@@ -83,18 +90,19 @@ def check_sales_orders(customer: str) -> dict:
                              "SalesOrder", customer)
     rows = headers("API_SALES_ORDER_SRV", "A_SalesOrder", "SalesOrder", list(docs), "OverallSDProcessStatus ne 'C'",
                    "SalesOrder,SalesOrderType,CreationDate,PurchaseOrderByCustomer,TotalNetAmount,TransactionCurrency,"
-                   "OverallSDProcessStatus,OverallDeliveryStatus,SoldToParty")
+                   "OverallSDProcessStatus,OverallDeliveryStatus,OverallSDDocumentRejectionSts,SoldToParty")
     documents = [{
-        "number": r["SalesOrder"], "type": r["SalesOrderType"], "date": odata_date(r["CreationDate"]),
+        "number": r["SalesOrder"], "type": r["SalesOrderType"], "date": odata.date(r["CreationDate"]),
         "roles": sorted(role_text(f) for f in docs[r["SalesOrder"]]),
         "status": f"{PROCESS_STATUS.get(r['OverallSDProcessStatus'], r['OverallSDProcessStatus'])}"
-                  + (f", {DELIVERY_STATUS[r['OverallDeliveryStatus']]}" if r["OverallDeliveryStatus"] in DELIVERY_STATUS else ""),
+                  + (f", {DELIVERY_STATUS[r['OverallDeliveryStatus']]}" if r["OverallDeliveryStatus"] in DELIVERY_STATUS else "")
+                  + (", vollständig abgelehnt" if rejected(r) else ""),
         "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
         "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else r["PurchaseOrderByCustomer"],
-        "blocking": True,
+        "blocking": not rejected(r),
     } for r in rows]
     return result("sales_orders", "Kundenaufträge (nicht erledigt)", "API_SALES_ORDER_SRV", documents,
-                  f"{len(docs)} Aufträge mit dem Kunden als Partner geprüft")
+                  f"{len(docs)} Aufträge mit dem Kunden als Partner geprüft; vollständig abgelehnte nur als Hinweis")
 
 
 def check_quotations(customer: str) -> dict:
@@ -103,23 +111,24 @@ def check_quotations(customer: str) -> dict:
     rows = headers("API_SALES_QUOTATION_SRV", "A_SalesQuotation", "SalesQuotation", list(docs),
                    "OverallSDProcessStatus ne 'C'",
                    "SalesQuotation,SalesQuotationType,CreationDate,BindingPeriodValidityEndDate,TotalNetAmount,"
-                   "TransactionCurrency,OverallSDProcessStatus,SoldToParty")
+                   "TransactionCurrency,OverallSDProcessStatus,OverallSDDocumentRejectionSts,SoldToParty")
     today = date.today().isoformat()
     documents = []
     for r in rows:
-        valid_to = odata_date(r["BindingPeriodValidityEndDate"])
+        valid_to = odata.date(r["BindingPeriodValidityEndDate"])
         expired = bool(valid_to) and valid_to < today
         documents.append({
-            "number": r["SalesQuotation"], "type": r["SalesQuotationType"], "date": odata_date(r["CreationDate"]),
+            "number": r["SalesQuotation"], "type": r["SalesQuotationType"], "date": odata.date(r["CreationDate"]),
             "roles": sorted(role_text(f) for f in docs[r["SalesQuotation"]]),
             "status": PROCESS_STATUS.get(r["OverallSDProcessStatus"], r["OverallSDProcessStatus"])
-                      + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else ""),
+                      + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else "")
+                      + (", vollständig abgelehnt" if rejected(r) else ""),
             "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
             "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
-            "blocking": not expired,
+            "blocking": not expired and not rejected(r),
         })
     return result("quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV", documents,
-                  f"{len(docs)} Angebote mit dem Kunden als Partner geprüft; abgelaufene nur als Hinweis")
+                  f"{len(docs)} Angebote mit dem Kunden als Partner geprüft; abgelaufene und abgelehnte nur als Hinweis")
 
 
 def check_billing(customer: str) -> dict:
@@ -130,7 +139,7 @@ def check_billing(customer: str) -> dict:
         "$select": "BillingDocument,BillingDocumentType,BillingDocumentDate,TotalNetAmount,TransactionCurrency,"
                    "AccountingTransferStatus,SoldToParty,PayerParty"}))
     documents = [{
-        "number": r["BillingDocument"], "type": r["BillingDocumentType"], "date": odata_date(r["BillingDocumentDate"]),
+        "number": r["BillingDocument"], "type": r["BillingDocumentType"], "date": odata.date(r["BillingDocumentDate"]),
         "roles": [role_text(f) for f, p in (("AG", r["SoldToParty"]), ("RG", r["PayerParty"])) if same_number(p, customer)],
         "status": TRANSFER_STATUS.get(r["AccountingTransferStatus"], f"Status {r['AccountingTransferStatus']}"),
         "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"], "info": "",
@@ -151,10 +160,10 @@ def check_deliveries(customer: str) -> dict:
                    "DeliveryDocument,DeliveryDocumentType,CreationDate,PlannedGoodsIssueDate,OverallGoodsMovementStatus,"
                    "SoldToParty,ShipToParty")
     documents = [{
-        "number": r["DeliveryDocument"], "type": r["DeliveryDocumentType"], "date": odata_date(r["CreationDate"]),
+        "number": r["DeliveryDocument"], "type": r["DeliveryDocumentType"], "date": odata.date(r["CreationDate"]),
         "roles": sorted(role_text(f) for f in docs[r["DeliveryDocument"]]),
         "status": GOODS_MOVEMENT_STATUS.get(r["OverallGoodsMovementStatus"], r["OverallGoodsMovementStatus"])
-                  + (f", geplant {odata_date(r['PlannedGoodsIssueDate'])}" if r["PlannedGoodsIssueDate"] else ""),
+                  + (f", geplant {odata.date(r['PlannedGoodsIssueDate'])}" if r["PlannedGoodsIssueDate"] else ""),
         "amount": None, "currency": "",
         "info": " · ".join(x for x in (
             f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
@@ -168,28 +177,30 @@ def check_deliveries(customer: str) -> dict:
 def sd_documents(check_id: str, title: str, service: str, header: str, key: str, partner_entities: list[str],
                  type_field: str, customer: str, valid_to_field: str = "") -> dict:
     """Sales documents not completed (overall processing status != C) with the customer in any partner function;
-    with `valid_to_field`, documents whose validity has ended are only a hint."""
+    fully rejected documents and, with `valid_to_field`, documents whose validity has ended are only a hint."""
     docs = partner_documents(service, partner_entities, key, customer)
     rows = headers(service, header, key, list(docs), "OverallSDProcessStatus ne 'C'",
                    ",".join(x for x in (key, type_field, "CreationDate", valid_to_field, "TotalNetAmount",
-                                        "TransactionCurrency", "OverallSDProcessStatus", "SoldToParty") if x))
+                                        "TransactionCurrency", "OverallSDProcessStatus", "OverallSDDocumentRejectionSts",
+                                        "SoldToParty") if x))
     today = date.today().isoformat()
     documents = []
     for r in rows:
-        valid_to = odata_date(r[valid_to_field]) if valid_to_field else ""
+        valid_to = odata.date(r[valid_to_field]) if valid_to_field else ""
         expired = bool(valid_to) and valid_to < today
         documents.append({
-            "number": r[key], "type": r[type_field], "date": odata_date(r["CreationDate"]),
+            "number": r[key], "type": r[type_field], "date": odata.date(r["CreationDate"]),
             "roles": sorted(role_text(f) for f in docs[r[key]]),
             "status": PROCESS_STATUS.get(r["OverallSDProcessStatus"], r["OverallSDProcessStatus"])
-                      + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else ""),
+                      + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else "")
+                      + (", vollständig abgelehnt" if rejected(r) else ""),
             "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
             "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
-            "blocking": not expired,
+            "blocking": not expired and not rejected(r),
         })
     return result(check_id, title, service, documents,
-                  f"{len(docs)} Belege mit dem Kunden als Partner geprüft"
-                  + ("; abgelaufene nur als Hinweis" if valid_to_field else ""))
+                  f"{len(docs)} Belege mit dem Kunden als Partner geprüft; "
+                  + ("abgelaufene und abgelehnte" if valid_to_field else "vollständig abgelehnte") + " nur als Hinweis")
 
 
 def check_contracts(customer: str) -> dict:
@@ -227,12 +238,12 @@ def open_items(field: str, account_type: str, number: str) -> list[dict]:
     today = date.today().isoformat()
     documents = []
     for r in rows:
-        due = odata_date(r["NetDueDate"])
+        due = odata.date(r["NetDueDate"])
         noted = r["AccountingDocumentCategory"] == "S"   # noted item: not posted to the balance
         special = r["SpecialGLCode"]
         documents.append({
             "number": f"{r['AccountingDocument']}/{r['FiscalYear']}", "type": r["AccountingDocumentType"],
-            "date": odata_date(r["PostingDate"]),
+            "date": odata.date(r["PostingDate"]),
             "roles": [f"Sonderhauptbuch {special}" + (f" {SPECIAL_GL[special]}" if special in SPECIAL_GL else "")] if special else [],
             "status": ("Merkposten, " if noted else "offen, ")
                       + (f"fällig seit {due}" if due and due < today else f"fällig am {due}" if due else "ohne Fälligkeit"),

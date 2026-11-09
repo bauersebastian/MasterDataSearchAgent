@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..errors import openai_error
-from . import ai_search, deletion_check, duplicates, orders, sap, search
+from . import ai_search, deletion_check, duplicates, sap, search
 from .data import load_partners, table_labels
 
 router = APIRouter(prefix="/api/partners")
@@ -81,22 +81,6 @@ def get_xml(partner: str) -> dict:
     if p is None:
         raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden")
     return sap.message(p)
-
-
-@router.get("/{partner}/orders")
-def get_open_orders(partner: str) -> dict:
-    """Open sales orders of the partner's customer number, live from SAP."""
-    p = load_partners().get(partner.lstrip("0") or partner)
-    if p is None:
-        raise HTTPException(404, f"Geschäftspartner {partner} nicht gefunden")
-    if not p.kunnr:
-        raise HTTPException(400, f"Geschäftspartner {partner} hat keine Kundenrolle")
-    if not (os.getenv("SAP_USER") and os.getenv("SAP_PASSWORD")):
-        raise HTTPException(500, "SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert")
-    try:
-        return orders.open_orders(p.kunnr_sap)
-    except orders.SapError as e:
-        raise HTTPException(502, str(e)) from e
 
 
 @router.post("/{partner}/deletion-check")

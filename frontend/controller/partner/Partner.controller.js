@@ -40,7 +40,6 @@ sap.ui.define([
     onInit() {
       this.getView().setModel(new JSONModel({ busy: true }), "p");
       this.getView().setModel(new JSONModel({ candidates: null, shown: null, showAll: false, busy: false }), "d");
-      this.getView().setModel(new JSONModel({ orders: null, busy: false }), "orders");
       this.getView().setModel(new JSONModel({}), "del");
       this.getOwnerComponent().getRouter().getRoute("partner").attachPatternMatched(this.onRouteMatched, this);
       api("api/partners/tables").then((labels) => { this.tableLabels = labels; }).catch(() => { this.tableLabels = {}; });
@@ -53,7 +52,6 @@ sap.ui.define([
       const p = this.getView().getModel("p");
       p.setData({ partner, busy: true });
       this.getView().getModel("d").setData({ candidates: null, shown: null, showAll: false, busy: true, assessment: null });
-      this.getView().getModel("orders").setData({ orders: null, busy: false });
       this.byId("page").setSelectedSection(null);
       this.partner = partner;
       try {
@@ -70,27 +68,6 @@ sap.ui.define([
         return;
       }
       this.loadCandidates(partner);
-      if (data.kunnr) {
-        this.loadOrders(partner);
-      }
-    },
-
-    // --- open sales orders of the customer, live from SAP (API_SALES_ORDER_SRV) ---
-    async loadOrders(partner) {
-      const o = this.getView().getModel("orders");
-      o.setData({ orders: null, busy: true });
-      try {
-        const result = await api(`api/partners/${encodeURIComponent(partner)}/orders`);
-        if (partner === this.partner) {
-          const totals = result.totals.filter((t) => t.amount).map((t) => `${this.formatAmount(t.amount)} ${t.currency}`).join(" + ");
-          o.setData({ ...result, busy: false,
-            info: `Kunde ${result.customer}${totals ? ` · Summe netto ${totals}` : ""} · gelesen ${new Date().toLocaleTimeString("de-DE")}` });
-        }
-      } catch (e) {
-        if (partner === this.partner) {
-          o.setData({ orders: [], busy: false, error: `Kundenaufträge konnten nicht aus SAP gelesen werden: ${e.message}` });
-        }
-      }
     },
 
     // --- deletion check: open documents in SAP, read live on demand only ---
@@ -120,10 +97,6 @@ sap.ui.define([
 
     onCloseDeletionCheck() {
       this.deletionDialog.close();
-    },
-
-    onReloadOrders() {
-      this.loadOrders(this.partner);
     },
 
     formatDate(iso) {
