@@ -69,14 +69,43 @@ The first start embeds all materials and takes a few minutes.
 To deploy a new version, build and push the image, then set `image.tag` in
 `helm/values.yaml` to the first 8 characters of the commit hash.
 
-The app has no login of its own. The Ingress sends every request to Kong (Service
-`mpm-search-kong`, pointing to the ClusterIP of `kong/kong-proxy` set in `kong.address`). Kong asks for basic
-auth (consumer `mpm`, same login as the research agent) and forwards to the Service `mpm-search`. The Kong route
-`mpm-search` lives in `kong/kong-declarative.yaml` of the keycloak repo. The chart refuses to render the Ingress
-with `kong.enabled: false`.
+The app has no login of its own. The Ingress sends every request to Kong through the Service
+`mpm-search-kong`. Kong asks for basic auth (consumer `mpm`, same login as the research agent) and forwards to
+the Service `mpm-search`. The Kong route `mpm-search` lives in `kong/kong-declarative.yaml` of the keycloak repo.
+The chart refuses to render the Ingress with `kong.enabled: false`.
 
-If the Service `kong/kong-proxy` is recreated, its ClusterIP changes: update `kong.address`, otherwise Traefik
-answers 502/504.
+`mpm-search-kong` has no selector. Its EndpointSlice points to the ClusterIP of `kong/kong-proxy` and is applied
+by hand, because ArgoCD excludes EndpointSlices and would never create it from the chart. Apply it again whenever
+the namespace is recreated:
+
+```bash
+KONG_IP=$(kubectl get service kong-proxy \
+  --namespace kong \
+  --output jsonpath='{.spec.clusterIP}')
+
+kubectl apply \
+  --namespace mpm-search \
+  --filename - <<EOF
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: mpm-search-kong
+  labels:
+    kubernetes.io/service-name: mpm-search-kong
+    endpointslice.kubernetes.io/managed-by: manual
+addressType: IPv4
+ports:
+  - name: http
+    port: 80
+    protocol: TCP
+endpoints:
+  - addresses:
+      - "$KONG_IP"
+EOF
+```
+
+If the Service `kong/kong-proxy` is recreated, its ClusterIP changes and Traefik answers 502/504: apply the
+EndpointSlice again. This is temporary until the Ingress moves to the `kong` namespace in the keycloak repo.
 
 ## Search
 

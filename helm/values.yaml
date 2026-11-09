@@ -21,7 +21,6 @@ ingress:
 
 kong:
   enabled: true
-  address: 10.43.180.27 # ClusterIP of Service kong/kong-proxy
   port: 80
 
 existingSecret: mpm-search-secrets
