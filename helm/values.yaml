@@ -1,0 +1,45 @@
+replicaCount: 1
+
+imagePullSecrets:
+  - name: gitlab-registry-secret
+
+image:
+  repository: code.fis-gmbh.de:4567/fis-gruppe/intern/ai-solutions/ai-apps/ai-services/mpm-master_data_search
+  tag: "2f0db287"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+
+ingress:
+  enabled: false
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-rfc2136
+  host: mpm-search.rke2-fisg-03.k8s.frankencloud.de
+  tlsSecret: mpm-search-tls
+
+existingSecret: mpm-search-secrets
+
+config:
+  MDSA_EMBEDDING_MODEL: text-embedding-3-large
+  MDSA_EMBEDDING_DIMENSIONS: 1536
+  MDSA_MODEL: gpt-5.6-luna
+  MDSA_LANGUAGE: D
+  SAP_REQUEST_TIMEOUT: 120
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 10001
+
+persistence:
+  size: 2Gi
+  accessMode: ReadWriteOnce
+  mountPath: /app/data
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
