@@ -156,6 +156,13 @@ sap.ui.define([
       d.setProperty("/shown", d.getProperty("/showAll") ? candidates : relevant);
     },
 
+    // golden record wizard with this partner and the candidates the LLM rated as (possible) duplicate
+    onGoldenRecord() {
+      const candidates = (this.getView().getModel("d").getProperty("/candidates") || [])
+        .filter((c) => ["Dublette", "Mögliche Dublette"].includes(c.verdict?.verdict)).map((c) => c.partner);
+      this.getOwnerComponent().getRouter().navTo("partnerMerge", { partners: [this.partner, ...candidates].join(",") });
+    },
+
     onToggleAllCandidates() {
       const d = this.getView().getModel("d");
       d.setProperty("/showAll", !d.getProperty("/showAll"));

@@ -238,6 +238,9 @@
                     <Button text="KI-Bewertung" icon="sap-icon://ai" type="Emphasized" press=".onAssess"
                       enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/shown} &amp;&amp; ${d>/shown}.length > 0 }"
                       tooltip="Angezeigte Kandidaten vom LLM bewerten lassen"/>
+                    <Button text="Golden Record" icon="sap-icon://combine" press=".onGoldenRecord"
+                      enabled="{= !!${d>/duplicateFound} }"
+                      tooltip="Diesen Partner mit den von der KI als (mögliche) Dublette bewerteten Kandidaten zusammenführen"/>
                   </OverflowToolbar>
                 </headerToolbar>
                 <columns>

@@ -51,10 +51,55 @@ sap.ui.define([
             + `${l.status === "sent" ? "gesendet" : "fehlgeschlagen"}${l.current_extract ? "" : ", älterer Extrakt"})`).join("; ")}` : ""
         });
         this.updateKeep();
+        this.assess();
       } catch (e) {
         m.setProperty("/busy", false);
         MessageBox.error(`Die Gruppe konnte nicht geladen werden: ${e.message}`);
       }
+    },
+
+    // the heuristic group of the overview contains possible duplicates only: the LLM judges every member against the
+    // partner to keep; only real duplicates ("Dublette") stay ticked, "Mögliche Dublette" is the user's decision
+    async assess() {
+      const m = this.model;
+      const reference = m.getProperty("/keep");
+      const ids = this.ids;
+      if (!this.getView().getModel().getProperty("/config/openai_configured")) {
+        m.setProperty("/assessment", { error: "OPENAI_API_KEY ist nicht konfiguriert – keine KI-Bewertung, alle Partner der Gruppe sind einbezogen. Bitte selbst prüfen." });
+        return;
+      }
+      const candidates = m.getProperty("/partners").map((p) => p.partner).filter((p) => p !== reference);
+      m.setProperty("/assessing", true);
+      m.setProperty("/assessment", null);
+      this.updateKeep();
+      try {
+        const result = await api(`api/partners/${encodeURIComponent(reference)}/duplicates/assess`, { candidates });
+        if (ids !== this.ids) {
+          return;
+        }
+        const verdicts = Object.fromEntries(result.verdicts.map((v) => [v.partner, v]));
+        m.setProperty("/partners", m.getProperty("/partners").map((p) => {
+          if (p.partner === reference) {
+            return { ...p, verdict: "Referenz", verdict_reason: "", included: true };
+          }
+          const v = verdicts[p.partner];
+          return { ...p, verdict: v ? v.verdict : "nicht bewertet", verdict_reason: v ? v.reason : "",
+            included: !!v && v.verdict === "Dublette" };
+        }));
+        const duplicates = result.verdicts.filter((v) => v.verdict === "Dublette").length;
+        m.setProperty("/assessment", { reference, summary: result.summary, duplicates });
+      } catch (e) {
+        m.setProperty("/assessment", { error: `KI-Bewertung fehlgeschlagen: ${e.message} – bitte die Gruppe selbst prüfen.` });
+      } finally {
+        if (ids === this.ids) {
+          m.setProperty("/assessing", false);
+          this.updateKeep();
+        }
+      }
+    },
+
+    onReassess() {
+      this.assess();
     },
 
     included() {
@@ -102,7 +147,7 @@ sap.ui.define([
         }
       }
       m.setProperty("/hints", hints);
-      m.setProperty("/keepValid", !!keep && others.length > 0);
+      m.setProperty("/keepValid", !!keep && others.length > 0 && !m.getProperty("/assessing"));
       m.setProperty("/advice", null);
       m.setProperty("/preview", null);
       m.setProperty("/result", null);
@@ -311,8 +356,8 @@ sap.ui.define([
       const m = this.model;
       const preview = m.getProperty("/preview");
       MessageBox.confirm(`Golden Record für ${preview.keep} (${preview.changes.length} Änderungen an `
-        + `${preview.others.length + 1} Partnern) an die DXTO-Staging-Tabelle senden?\n\n${preview.endpoint}`, {
-        title: "An DXTO senden",
+        + `${preview.others.length + 1} Partnern) an FIS/mpm senden (Staging-Tabelle DXTO)?\n\n${preview.endpoint}`, {
+        title: "An FIS/mpm senden",
         emphasizedAction: MessageBox.Action.OK,
         onClose: async (action) => {
           if (action !== MessageBox.Action.OK) {
@@ -325,7 +370,7 @@ sap.ui.define([
             m.setProperty("/result", sent.result);
             m.setProperty("/logId", sent.log_id);
             if (sent.result.ok) {
-              MessageToast.show("Golden Record an DXTO gesendet und protokolliert");
+              MessageToast.show("Golden Record an FIS/mpm gesendet und protokolliert");
             } else {
               m.setProperty("/tab", "response");
               MessageBox.error(`SAP hat die Nachricht nicht angenommen (HTTP ${sent.result.status_code}). Details im Reiter SAP-Antwort.`);

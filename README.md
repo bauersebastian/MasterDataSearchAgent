@@ -241,7 +241,13 @@ response still carries `service` (and `error` for failed areas), and failures ar
 *Zusammenführen* on a group of the duplicate overview opens a wizard (`#/golden-record/<p1>,<p2>,...`,
 `backend/partner/merge.py`) for one group at a time:
 
-1. **Keep** – suggested: not deleted / blocked, customer and vendor, most info records, contacts, sales areas and
+*Golden Record* on the partner page (after the AI assessment) opens it with the partner and the candidates rated
+(possible) duplicate.
+
+1. **Keep** – the groups of the overview are heuristic, so the LLM first judges every member against the suggested
+   partner (`/api/partners/{partner}/duplicates/assess`); only *Dublette* stays included, *Mögliche Dublette*,
+   *Verwandt* and *Verschieden* are excluded (the user can include them again; after changing the kept partner the
+   assessment can be repeated against it). Suggested: not deleted / blocked, customer and vendor, most info records, contacts, sales areas and
    purchasing organisations. Partners that are no duplicate can be excluded. Sales areas (GKVP) or purchasing
    organisations (GLT3) of the others that the kept partner lacks are shown as a hint (they can be created in the add-on).
 2. **Treat the others** – deletion check per partner (live, cached for `MDSA_MERGE_CHECK_MAX_AGE`). Options:
@@ -251,7 +257,7 @@ response still carries `service` (and `error` for failed areas), and failures ar
    founding date or birth date, standard address as a whole) and the communication, bank, tax and id entries the kept
    partner lacks, and their relationships (contact persons, ...); the LLM picks the best value / decides what to take over (without `OPENAI_API_KEY`: the kept
    partner's values, missing ones from the others). A missing customer / vendor role is taken over from another partner.
-4. **Review and send** – changes, warnings and the DXTO message; sent to the staging table of the add-on, where it is
+4. **Review and send** – changes, warnings and the DXTO message; *An FIS/mpm senden* sends it to the staging table of the add-on, where it is
    approved and posted. Every send is logged in SQLite (`MDSA_MERGE_DB`, default `data/merges.sqlite`) with the
    extract timestamp; the overview marks the group as sent until a new extract arrives.
 

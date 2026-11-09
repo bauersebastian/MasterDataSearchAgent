@@ -166,9 +166,13 @@ sap.ui.define([
     },
     {
       title: "Golden Record – Dubletten zusammenführen",
-      html: `<p><em>Zusammenführen</em> in der Dublettenübersicht öffnet für eine Gruppe einen Assistenten in vier Schritten:</p>
+      html: `<p><em>Zusammenführen</em> in der Dublettenübersicht oder <em>Golden Record</em> nach der KI-Bewertung auf der
+        Detailseite (Partner mit den als (mögliche) Dublette bewerteten Kandidaten) öffnet für eine Gruppe einen Assistenten in vier Schritten:</p>
         <ol>
-          <li><strong>Partner behalten:</strong> Vorschlag ist der Partner ohne Löschvormerkung/Sperre, der Kunde und
+          <li><strong>Partner behalten:</strong> die Gruppen der Übersicht enthalten nur <em>mögliche</em> Dubletten. Die
+          KI bewertet daher jeden Partner gegenüber dem vorgeschlagenen; nur echte <em>Dubletten</em> bleiben angehakt,
+          <em>mögliche Dubletten</em>, verwandte und verschiedene Partner werden abgewählt (bei Bedarf selbst anhaken).
+          Vorschlag ist der Partner ohne Löschvormerkung/Sperre, der Kunde und
           Lieferant ist und die meisten Infosätze, Ansprechpartner und Organisationen hat. Partner, die keine Dublette
           sind, lassen sich abwählen. Fehlen dem behaltenen Partner Vertriebsbereiche oder Einkaufsorganisationen der
           anderen, erscheint ein Hinweis – sie können im Add-on angelegt werden.</li>
@@ -181,7 +185,7 @@ sap.ui.define([
           Standardadresse, …) den besten Wert und schlägt Telefon, Fax, E-Mail, Webseite, Bankverbindungen, Steuer- und
           Identifikationsnummern der anderen zur Übernahme vor. Ist der behaltene Partner kein Kunde oder Lieferant, wird
           die Rolle eines anderen übernommen; die neue Nummer vergibt das Add-on. Alles lässt sich ändern.</li>
-          <li><strong>Prüfen und senden:</strong> zeigt alle Änderungen und die Importnachricht. <em>An DXTO senden</em>
+          <li><strong>Prüfen und senden:</strong> zeigt alle Änderungen und die Importnachricht. <em>An FIS/mpm senden</em>
           stellt sie in die Staging-Tabelle des Add-ons; Prüfung, Freigabe und Buchung erfolgen dort. Jede Sendung wird
           protokolliert (<em>Protokoll</em>); die Gruppe ist in der Übersicht als gesendet markiert, bis der nächste
           Extrakt die Partner nicht mehr als Dubletten enthält.</li>

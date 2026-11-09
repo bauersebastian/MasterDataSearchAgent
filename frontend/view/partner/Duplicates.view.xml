@@ -112,7 +112,7 @@
                   tooltip="Assistent: einen Partner behalten, beste Daten übernehmen, die anderen löschen oder sperren"/>
                 <ObjectStatus visible="{= !!${o>merge} }" state="Success" icon="sap-icon://upload-to-cloud" class="sapUiTinyMarginTop"
                   text="{= ${o>merge} ? 'gesendet, behalten ' + ${o>merge/keep} : '' }"
-                  tooltip="An DXTO gesendet - verschwindet mit dem nächsten Extrakt"/>
+                  tooltip="An FIS/mpm gesendet - verschwindet mit dem nächsten Extrakt"/>
               </VBox>
             </ColumnListItem>
           </items>

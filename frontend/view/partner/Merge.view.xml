@@ -32,6 +32,20 @@
             text="Der behaltene Partner wird mit den besten Daten der anderen aktualisiert, die anderen erhalten eine Löschvormerkung oder Sperren. Vorschlag: nicht gelöscht/gesperrt, Kunde und Lieferant, meiste Infosätze, Ansprechpartner und Organisationen. Partner, die keine Dublette sind, hier abwählen."/>
           <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom" visible="{= ${m>/log}.length > 0 }"
             text="{m>/logText}"/>
+          <HBox alignItems="Center" visible="{= !!${m>/assessing} }" class="sapUiSmallMarginBottom">
+            <BusyIndicator size="1rem" class="sapUiTinyMarginEnd"/>
+            <Text text="Die KI prüft, welche Partner der Gruppe wirklich Dubletten sind …"/>
+          </HBox>
+          <MessageStrip visible="{= !!${m>/assessment/summary} }" showIcon="true" customIcon="sap-icon://ai"
+            class="sapUiSmallMarginBottom" type="{= ${m>/assessment/duplicates} > 0 ? 'Information' : 'Warning' }"
+            text="{= 'KI-Bewertung gegenüber ' + ${m>/assessment/reference} + ': ' + ${m>/assessment/summary} + (${m>/assessment/duplicates} > 0 ? ' Nur echte Dubletten sind einbezogen; mögliche Dubletten bei Bedarf selbst anhaken.' : ' Keine echte Dublette – nichts zusammenzuführen, außer Sie haken Partner selbst an.') }">
+            <link>
+              <Link text="Gegenüber behaltenem Partner neu bewerten" press=".onReassess"
+                visible="{= ${m>/assessment/reference} !== ${m>/keep} }"/>
+            </link>
+          </MessageStrip>
+          <MessageStrip visible="{= !!${m>/assessment/error} }" type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+            text="{m>/assessment/error}"/>
           <Table items="{path: 'm>/partners', templateShareable: false}" popinLayout="GridSmall">
             <columns>
               <Column width="5rem" hAlign="Center"><Text text="Behalten"/></Column>
@@ -39,10 +53,11 @@
               <Column><Text text="Partner"/></Column>
               <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Kunde / Lieferant"/></Column>
               <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Vertriebsbereiche / EkOrg"/></Column>
-              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Bewertung"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="KI-Bewertung"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Gründe Vorschlag"/></Column>
             </columns>
             <items>
-              <ColumnListItem vAlign="Top" highlight="{= ${m>partner} === ${m>/keep} ? 'Success' : ${m>included} ? 'None' : 'Inactive' }">
+              <ColumnListItem vAlign="Top" highlight="{= ${m>partner} === ${m>/keep} ? 'Success' : ${m>included} ? 'Information' : 'None' }">
                 <RadioButton groupName="keep" selected="{= ${m>partner} === ${m>/keep} }" select=".onKeepSelect"
                   enabled="{m>included}"/>
                 <CheckBox selected="{m>included}" select=".onIncludeChange" enabled="{= ${m>partner} !== ${m>/keep} }"/>
@@ -66,6 +81,11 @@
                 <VBox>
                   <Text text="{= ${m>sales_areas}.length ? 'VB ' + ${m>sales_areas}.join(', ') : '' }" visible="{= ${m>sales_areas}.length > 0 }"/>
                   <Text text="{= ${m>purchasing_orgs}.length ? 'EkOrg ' + ${m>purchasing_orgs}.join(', ') : '' }" visible="{= ${m>purchasing_orgs}.length > 0 }"/>
+                </VBox>
+                <VBox>
+                  <ObjectStatus text="{m>verdict}" visible="{= !!${m>verdict} }" inverted="true"
+                    state="{= ${m>verdict} === 'Dublette' ? 'Success' : ${m>verdict} === 'Mögliche Dublette' ? 'Warning' : ${m>verdict} === 'Referenz' ? 'Information' : 'Error' }"/>
+                  <Text text="{m>verdict_reason}" class="mdsaStatus" visible="{= !!${m>verdict_reason} }"/>
                 </VBox>
                 <Text text="{= ${m>reasons}.join(', ') }" class="mdsaStatus"/>
               </ColumnListItem>
@@ -173,7 +193,7 @@
           <BusyIndicator visible="{m>/previewBusy}" class="sapUiSmallMargin"/>
           <VBox visible="{= !!${m>/preview} }">
             <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
-              text="Die Nachricht geht in die DXTO-Staging-Tabelle des Add-ons ({m>/preview/variant}). Dort wird sie geprüft, freigegeben und gebucht; neue Nummern vergibt das Add-on. Die Partner verschwinden aus der Dublettenübersicht mit dem nächsten Extrakt."/>
+              text="Die Daten werden an einen Arbeitsvorrat in FIS/mpm übergeben. Dort können sie geprüft, freigegeben und nach SAP ERP verbucht werden."/>
             <VBox items="{path: 'm>/preview/warnings', templateShareable: false}">
               <MessageStrip type="Warning" showIcon="true" text="{m>}" class="sapUiTinyMarginBottom"/>
             </VBox>
@@ -181,7 +201,7 @@
               text="SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert - Senden nicht möglich."/>
             <MessageStrip visible="{= !!${m>/result} }" showIcon="true" class="sapUiSmallMarginBottom"
               type="{= ${m>/result/ok} ? 'Success' : 'Error' }"
-              text="{= ${m>/result/ok} ? 'An DXTO gesendet (HTTP ' + ${m>/result/status_code} + '), Protokoll Nr. ' + ${m>/logId} : 'Senden fehlgeschlagen (HTTP ' + ${m>/result/status_code} + ') - Antwort im Reiter SAP-Antwort, Protokoll Nr. ' + ${m>/logId} }"/>
+              text="{= ${m>/result/ok} ? 'An FIS/mpm gesendet (HTTP ' + ${m>/result/status_code} + '), Protokoll Nr. ' + ${m>/logId} : 'Senden fehlgeschlagen (HTTP ' + ${m>/result/status_code} + ') - Antwort im Reiter SAP-Antwort, Protokoll Nr. ' + ${m>/logId} }"/>
             <IconTabBar selectedKey="{m>/tab}" expandable="false" applyContentPadding="false" headerBackgroundDesign="Transparent">
               <items>
                 <IconTabFilter key="changes" text="Änderungen ({= ${m>/preview/changes}.length })" icon="sap-icon://list">
@@ -215,7 +235,7 @@
             <HBox class="sapUiSmallMarginTop">
               <Button text="Herunterladen" icon="sap-icon://download" press=".onDownload" class="sapUiTinyMarginEnd"
                 enabled="{= !!${m>/preview/xml} }"/>
-              <Button text="An DXTO senden" type="Emphasized" icon="sap-icon://upload-to-cloud" press=".onSend"
+              <Button text="An FIS/mpm senden" type="Emphasized" icon="sap-icon://upload-to-cloud" press=".onSend"
                 enabled="{= !!${/config/sap_configured} &amp;&amp; !!${m>/preview/xml} &amp;&amp; !${m>/result/ok} }"/>
             </HBox>
           </VBox>
