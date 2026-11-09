@@ -211,13 +211,18 @@ partners):
 | Billing documents | `API_BILLING_DOCUMENT_SRV` | not cancelled, sold-to or payer, not transferred to accounting (transfer status not *C* / *D* / *E*) |
 | Open items customer / supplier (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the customer (account type *D*) or supplier (*K*) account, all company codes, incl. special G/L (down payments); noted items (category *S*, e.g. down payment requests) only as a warning; the summary shows the balance of the open items |
 
+| Outbound deliveries | `API_OUTBOUND_DELIVERY_SRV;v=0002` | goods issue not (fully) posted (goods movement status *A* / *B*), sold-to or ship-to |
+| Contracts | `API_SALES_CONTRACT_SRV` | overall processing status not *C*; contracts whose validity has ended only as a warning |
+| Scheduling agreements | `API_SALES_SCHEDULING_AGREEMENT` | overall processing status not *C*; ended validity only as a warning |
+| Returns | `API_CUSTOMER_RETURN_SRV` | overall processing status not *C* |
+| Credit memo requests | `API_CREDIT_MEMO_REQUEST_SRV` | overall processing status not *C* |
+
 The FI check runs for the supplier role as well. Filters use the 10-digit SAP number (`Partner.kunnr_sap` /
 `lifnr_sap`); the services accept it with or without leading zeros but return numbers **without** them, so results
 are compared via `same_number`.
 
-Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: deliveries
-without goods issue, contracts, scheduling agreements, returns, credit memo
-requests and, for vendors, purchase orders. The result is *Löschen nicht möglich* (open documents),
+Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: currently
+only purchase orders for suppliers (`API_PURCHASEORDER_PROCESS_SRV`). The result is *Löschen nicht möglich* (open documents),
 *unvollständig* (no open documents in the checked areas, but areas not checked) or *keine offenen Belege*. Once the
 missing services are activated in `/IWFND/MAINT_SERVICE`, the checks can be added in `backend/partner/deletion_check.py`.
 

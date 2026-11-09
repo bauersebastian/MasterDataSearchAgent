@@ -8,6 +8,9 @@ Checked (customer role):
 - sales quotations not completed, any partner function; expired quotations only as a warning
 - billing documents not (yet) posted to accounting (transfer status not C / D / E, not cancelled), sold-to or payer
 - open FI items of the customer account (API_OPLACCTGDOCITEMCUBE_SRV); noted items (down payment requests) only as a hint
+- outbound deliveries without completed goods issue (goods movement status A / B), sold-to or ship-to
+- contracts, scheduling agreements, returns, credit memo requests not completed, any partner function, header and
+  item partners; contracts / scheduling agreements whose validity has ended only as a hint
 
 Checked (supplier role):
 - open FI items of the supplier account, same service
@@ -33,13 +36,7 @@ TRANSFER_STATUS = {"": "Buchungsbeleg nicht erzeugt", "A": "für Übergabe an FI
                    "G": "nicht gebucht (Außenhandelsdaten fehlen)", "H": "nicht gebucht", "K": "nicht gebucht"}
 
 # areas that would belong to a complete check but whose API is not available in the system yet
-NOT_AVAILABLE_CUSTOMER = [
-    ("deliveries", "Lieferungen ohne Warenausgang", "API_OUTBOUND_DELIVERY_SRV;v=0002"),
-    ("contracts", "Kontrakte", "API_SALES_CONTRACT_SRV"),
-    ("scheduling_agreements", "Lieferpläne", "API_SALES_SCHEDULING_AGREEMENT"),
-    ("returns", "Retouren", "API_CUSTOMER_RETURN_SRV"),
-    ("credit_memo_requests", "Gutschriftsanforderungen", "API_CREDIT_MEMO_REQUEST_SRV"),
-]
+NOT_AVAILABLE_CUSTOMER: list[tuple[str, str, str]] = []
 NOT_AVAILABLE_VENDOR = [
     ("purchase_orders", "Offene Bestellungen", "API_PURCHASEORDER_PROCESS_SRV"),
 ]
@@ -143,6 +140,83 @@ def check_billing(customer: str) -> dict:
                   "Auftraggeber oder Regulierer, nicht storniert")
 
 
+DELIVERY_SERVICE = "API_OUTBOUND_DELIVERY_SRV;v=0002"
+GOODS_MOVEMENT_STATUS = {"A": "Warenausgang nicht gebucht", "B": "Warenausgang teilweise gebucht"}
+
+
+def check_deliveries(customer: str) -> dict:
+    docs = partner_documents(DELIVERY_SERVICE, ["A_OutbDeliveryPartner"], "SDDocument", customer)
+    rows = headers(DELIVERY_SERVICE, "A_OutbDeliveryHeader", "DeliveryDocument", list(docs),
+                   "(OverallGoodsMovementStatus eq 'A' or OverallGoodsMovementStatus eq 'B')",
+                   "DeliveryDocument,DeliveryDocumentType,CreationDate,PlannedGoodsIssueDate,OverallGoodsMovementStatus,"
+                   "SoldToParty,ShipToParty")
+    documents = [{
+        "number": r["DeliveryDocument"], "type": r["DeliveryDocumentType"], "date": odata_date(r["CreationDate"]),
+        "roles": sorted(role_text(f) for f in docs[r["DeliveryDocument"]]),
+        "status": GOODS_MOVEMENT_STATUS.get(r["OverallGoodsMovementStatus"], r["OverallGoodsMovementStatus"])
+                  + (f", geplant {odata_date(r['PlannedGoodsIssueDate'])}" if r["PlannedGoodsIssueDate"] else ""),
+        "amount": None, "currency": "",
+        "info": " · ".join(x for x in (
+            f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
+            f"Warenempfänger {strip_zeros(r['ShipToParty'])}" if not same_number(r["ShipToParty"], customer) else "") if x),
+        "blocking": True,
+    } for r in rows]
+    return result("deliveries", "Lieferungen ohne Warenausgang", DELIVERY_SERVICE, documents,
+                  f"{len(docs)} Lieferungen mit dem Kunden als Partner geprüft")
+
+
+def sd_documents(check_id: str, title: str, service: str, header: str, key: str, partner_entities: list[str],
+                 type_field: str, customer: str, valid_to_field: str = "") -> dict:
+    """Sales documents not completed (overall processing status != C) with the customer in any partner function;
+    with `valid_to_field`, documents whose validity has ended are only a hint."""
+    docs = partner_documents(service, partner_entities, key, customer)
+    rows = headers(service, header, key, list(docs), "OverallSDProcessStatus ne 'C'",
+                   ",".join(x for x in (key, type_field, "CreationDate", valid_to_field, "TotalNetAmount",
+                                        "TransactionCurrency", "OverallSDProcessStatus", "SoldToParty") if x))
+    today = date.today().isoformat()
+    documents = []
+    for r in rows:
+        valid_to = odata_date(r[valid_to_field]) if valid_to_field else ""
+        expired = bool(valid_to) and valid_to < today
+        documents.append({
+            "number": r[key], "type": r[type_field], "date": odata_date(r["CreationDate"]),
+            "roles": sorted(role_text(f) for f in docs[r[key]]),
+            "status": PROCESS_STATUS.get(r["OverallSDProcessStatus"], r["OverallSDProcessStatus"])
+                      + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else ""),
+            "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
+            "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
+            "blocking": not expired,
+        })
+    return result(check_id, title, service, documents,
+                  f"{len(docs)} Belege mit dem Kunden als Partner geprüft"
+                  + ("; abgelaufene nur als Hinweis" if valid_to_field else ""))
+
+
+def check_contracts(customer: str) -> dict:
+    return sd_documents("contracts", "Kontrakte (nicht erledigt)", "API_SALES_CONTRACT_SRV", "A_SalesContract",
+                        "SalesContract", ["A_SalesContractPartner", "A_SalesContractItemPartner"], "SalesContractType",
+                        customer, "SalesContractValidityEndDate")
+
+
+def check_scheduling_agreements(customer: str) -> dict:
+    return sd_documents("scheduling_agreements", "Lieferpläne (nicht erledigt)", "API_SALES_SCHEDULING_AGREEMENT",
+                        "A_SalesSchedgAgrmt", "SalesSchedulingAgreement",
+                        ["A_SalesSchedgAgrmtPartner", "A_SalesSchedgAgrmtItemPartner"], "SalesSchedgAgrmtType",
+                        customer, "AgrmtValdtyEndDate")
+
+
+def check_returns(customer: str) -> dict:
+    return sd_documents("returns", "Retouren (nicht erledigt)", "API_CUSTOMER_RETURN_SRV", "A_CustomerReturn",
+                        "CustomerReturn", ["A_CustomerReturnPartner", "A_CustomerReturnItemPartner"],
+                        "CustomerReturnType", customer)
+
+
+def check_credit_memo_requests(customer: str) -> dict:
+    return sd_documents("credit_memo_requests", "Gutschriftsanforderungen (nicht erledigt)",
+                        "API_CREDIT_MEMO_REQUEST_SRV", "A_CreditMemoRequest", "CreditMemoRequest",
+                        ["A_CreditMemoReqPartner", "A_CreditMemoReqItemPartner"], "CreditMemoRequestType", customer)
+
+
 def open_items(field: str, account_type: str, number: str) -> list[dict]:
     """Open (not cleared) FI items of a customer (field Customer, type D) or supplier (Supplier, K) account."""
     rows = odata.get_all(FI_SERVICE, FI_ENTITY, {
@@ -199,8 +273,9 @@ def result(check_id: str, title: str, service: str, documents: list[dict], scope
     documents.sort(key=lambda d: not d["blocking"])
     blocking = sum(d["blocking"] for d in documents)
     status = "blocked" if blocking else "warning" if documents else "ok"
-    summary = (f"{blocking} offen" + (f", {len(documents) - blocking} Hinweis(e)" if len(documents) > blocking else "")
-               if documents else "keine offenen Belege")
+    hints = len(documents) - blocking
+    summary = ", ".join(x for x in (f"{blocking} offen" if blocking else "", f"{hints} Hinweis(e)" if hints else "")
+                        if x) or "keine offenen Belege"
     return {"id": check_id, "title": title, "service": service, "status": status, "summary": summary,
             "scope": scope, "documents": documents}
 
@@ -228,7 +303,14 @@ def check(partner: Partner) -> dict:
                  (check_quotations, "quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV", partner.kunnr_sap),
                  (check_billing, "billing", "Fakturen nicht an die Buchhaltung übergeben", "API_BILLING_DOCUMENT_SRV",
                   partner.kunnr_sap),
-                 (check_receivables, "receivables", "Offene Posten Debitor (FI)", FI_SERVICE, partner.kunnr_sap)]
+                 (check_receivables, "receivables", "Offene Posten Debitor (FI)", FI_SERVICE, partner.kunnr_sap),
+                 (check_deliveries, "deliveries", "Lieferungen ohne Warenausgang", DELIVERY_SERVICE, partner.kunnr_sap),
+                 (check_contracts, "contracts", "Kontrakte (nicht erledigt)", "API_SALES_CONTRACT_SRV", partner.kunnr_sap),
+                 (check_scheduling_agreements, "scheduling_agreements", "Lieferpläne (nicht erledigt)",
+                  "API_SALES_SCHEDULING_AGREEMENT", partner.kunnr_sap),
+                 (check_returns, "returns", "Retouren (nicht erledigt)", "API_CUSTOMER_RETURN_SRV", partner.kunnr_sap),
+                 (check_credit_memo_requests, "credit_memo_requests", "Gutschriftsanforderungen (nicht erledigt)",
+                  "API_CREDIT_MEMO_REQUEST_SRV", partner.kunnr_sap)]
     if partner.lifnr:
         runs += [(check_payables, "payables", "Offene Posten Kreditor (FI)", FI_SERVICE, partner.lifnr_sap)]
     checks: list[dict] = []
