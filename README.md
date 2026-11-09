@@ -69,13 +69,14 @@ The first start embeds all materials and takes a few minutes.
 To deploy a new version, build and push the image, then set `image.tag` in
 `helm/values.yaml` to the first 8 characters of the commit hash.
 
-The app has no login, so the Ingress is disabled (`ingress.enabled: false`).
-Do not enable it before authentication is in place. Access it with:
+The app has no login of its own. The Ingress sends every request to Kong (Service
+`mpm-search-kong`, pointing to the ClusterIP of `kong/kong-proxy` set in `kong.address`). Kong asks for basic
+auth (consumer `mpm`, same login as the research agent) and forwards to the Service `mpm-search`. The Kong route
+`mpm-search` lives in `kong/kong-declarative.yaml` of the keycloak repo. The chart refuses to render the Ingress
+with `kong.enabled: false`.
 
-```bash
-kubectl port-forward service/mpm-search 8000:80 \
-  --namespace mpm-search
-```
+If the Service `kong/kong-proxy` is recreated, its ClusterIP changes: update `kong.address`, otherwise Traefik
+answers 502/504.
 
 ## Search
 
@@ -164,5 +165,5 @@ to use api.openai.com instead.
 
 ## Notes
 
-The app currently has **no user authentication**: anyone who can reach it can post to SAP with the server's
-credentials. Bind it to `127.0.0.1` or put it behind a reverse proxy with auth/SSO.
+The app itself has **no user authentication**: anyone who can reach it can post to SAP with the server's
+credentials. In Kubernetes, Kong basic auth protects it (see *Kubernetes*). Locally, bind it to `127.0.0.1`.
