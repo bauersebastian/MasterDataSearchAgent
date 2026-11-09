@@ -22,7 +22,7 @@
               </Toolbar>
             </headerToolbar>
             <content>
-              <Text text="{del>scope} · {del>service}" class="mdsaStatus sapUiTinyMarginBottom"/>
+              <Text text="{del>scope}" class="mdsaStatus sapUiTinyMarginBottom"/>
               <Table items="{path: 'del>documents', templateShareable: false}" visible="{= ${del>documents}.length > 0 }" growing="true" growingThreshold="15"
                 growingScrollToLoad="false" popinLayout="GridSmall">
                 <columns>

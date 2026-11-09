@@ -122,9 +122,13 @@ sap.ui.define([
         nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis; vollständig abgelehnte Belege generell nur als Hinweis), Fakturen, die noch nicht an die
         Buchhaltung übergeben sind, Lieferungen ohne Warenausgang, nicht erledigte Kontrakte und Lieferpläne (abgelaufene
         nur als Hinweis), Retouren und Gutschriftsanforderungen, dazu offene Posten des Debitoren- bzw. Kreditorenkontos
-        (FI, alle Buchungskreise, mit Saldo; Merkposten wie Anzahlungsanforderungen nur als Hinweis). Bereiche ohne
-        freigeschaltete Schnittstelle (derzeit nur Bestellungen bei Lieferanten) erscheinen als <em>nicht geprüft</em> –
-        das Ergebnis ist dann „unvollständig“, nie „in Ordnung“.</p>`
+        (FI, alle Buchungskreise, mit Saldo; Merkposten wie Anzahlungsanforderungen nur als Hinweis).</p>
+        <p>Bei Lieferanten (als Lieferant, Rechnungssteller, Warenlieferant, Bestelladresse oder Bieter): nicht gebuchte
+        (vorerfasste) Eingangsrechnungen, Bestellungen mit nicht vollständig gelieferten Positionen, nicht gelöschte
+        Lieferpläne und Kontrakte des Einkaufs (abgelaufene nur als Hinweis) und Anlieferungen ohne Wareneingang. Nur als
+        Hinweis: offene Bestellanforderungen, offene Anfragen und die Einkaufsinfosätze laut Extrakt.</p>
+        <p>Bereiche, deren Schnittstelle nicht erreichbar ist, erscheinen als <em>nicht geprüft</em> – das Ergebnis ist
+        dann „unvollständig“, nie „in Ordnung“. Hinweise verhindern das Löschen nicht.</p>`
     },
     {
       title: "Dublettenprüfung für Geschäftspartner",

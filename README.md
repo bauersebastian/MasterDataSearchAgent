@@ -185,8 +185,9 @@ format and dialog, `GET /api/partners/{partner}/xml`, then `POST /api/sap/post`)
 
 *Löschprüfung* on the partner object page checks – on demand only, read only – whether open documents in SAP still
 reference the partner (preparation for marking partners as deleted). Live via the standard OData APIs
-(`SAP_ODATA_URL`, client `SAP_CLIENT`), `POST /api/partners/{partner}/deletion-check`. Checked for partners with a
-customer role, the customer in **any partner function** (sold-to, ship-to, bill-to, payer, … – header and item
+(`SAP_ODATA_URL`, client `SAP_CLIENT`), `POST /api/partners/{partner}/deletion-check`. All checks run in parallel.
+
+**Customer role** – the customer in **any partner function** (sold-to, ship-to, bill-to, payer, … – header and item
 partners):
 
 | Area | API | Blocking |
@@ -194,8 +195,7 @@ partners):
 | Sales orders | `API_SALES_ORDER_SRV` | overall processing status not *C* (completed) – also delivered but not yet billed orders, and orders without delivery-relevant items; fully rejected orders only as a warning |
 | Quotations | `API_SALES_QUOTATION_SRV` | not completed and still valid; expired quotations are only a warning |
 | Billing documents | `API_BILLING_DOCUMENT_SRV` | not cancelled, sold-to or payer, not transferred to accounting (transfer status not *C* / *D* / *E*) |
-| Open items customer / supplier (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the customer (account type *D*) or supplier (*K*) account, all company codes, incl. special G/L (down payments); noted items (category *S*, e.g. down payment requests) only as a warning; the summary shows the balance of the open items |
-
+| Open items customer (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the customer account (account type *D*), all company codes, incl. special G/L (down payments); noted items (category *S*, e.g. down payment requests) only as a warning; the summary shows the balance of the open items |
 | Outbound deliveries | `API_OUTBOUND_DELIVERY_SRV;v=0002` | goods issue not (fully) posted (goods movement status *A* / *B*), sold-to or ship-to |
 | Contracts | `API_SALES_CONTRACT_SRV` | overall processing status not *C*; contracts whose validity has ended only as a warning |
 | Scheduling agreements | `API_SALES_SCHEDULING_AGREEMENT` | overall processing status not *C*; ended validity only as a warning |
@@ -208,14 +208,33 @@ processing status is not *C*. Logon language `SAP_LOGON_LANGUAGE` makes document
 of *OR*). The SAP user needs read authorization for each API (`/IWFND/MAINT_SERVICE`: service active, role with
 `S_SERVICE` and display authorization for the documents).
 
-The FI check runs for the supplier role as well. Filters use the 10-digit SAP number (`Partner.kunnr_sap` /
-`lifnr_sap`); the services accept it with or without leading zeros but return numbers **without** them, so results
-are compared via `same_number`.
+**Supplier role** – the supplier as supplier (*LF*), invoicing party (*RS*), goods supplier (*WL*), ordering address
+(*BA*) or bidder (*BI*), from the header fields or the purchasing partner table, wherever the API has them:
 
-Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: currently
-only purchase orders for suppliers (`API_PURCHASEORDER_PROCESS_SRV`). The result is *Löschen nicht möglich* (open documents),
-*unvollständig* (no open documents in the checked areas, but areas not checked) or *keine offenen Belege*. Once the
-missing services are activated in `/IWFND/MAINT_SERVICE`, the checks can be added in `backend/partner/deletion_check.py`.
+| Area | API | Blocking |
+|---|---|---|
+| Open items supplier (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the supplier account (account type *K*), as for customers |
+| Supplier invoices | `API_SUPPLIERINVOICE_PROCESS_SRV` | not posted (parked / held, status not *5*), invoicing party; posted invoices are in the FI open items |
+| Purchase orders | `API_PURCHASEORDER_PROCESS_SRV` | not deleted, with items not deleted and not completely delivered; value of the open items = order quantity × net price. The final invoice flag is not maintained on fis127 (no item has it), so "not finally invoiced" is no criterion |
+| Scheduling agreements (purchasing) | `API_SCHED_AGRMT_PROCESS_SRV` | not deleted; validity ended only as a warning |
+| Contracts (purchasing) | `API_PURCHASECONTRACT_PROCESS_SRV;v=0002` | not deleted; validity ended only as a warning |
+| Inbound deliveries | `API_INBOUND_DELIVERY_SRV;v=0002` | goods receipt not (fully) posted (goods movement status *A* / *B*) |
+| Purchase requisitions | `API_PURCHASEREQ_PROCESS_SRV` | warning only: not deleted, not closed, not yet converted (processing status *N*), supplier as fixed or desired source |
+| Requests for quotation | `API_RFQ_PROCESS_SRV` | warning only: draft or published (lifecycle status *01* / *02*), supplier as bidder – also covers supplier quotations, which always answer an RFQ (`API_QTN_PROCESS_SRV` is therefore not needed) |
+| Purchasing info records | extract (`EINA`) | warning only: not deleted info records from the material extract (master data, not live) – `API_INFORECORD_PROCESS_SRV` is not needed |
+
+The purchasing partner table (EKPA) holds the partners of all purchasing documents, so the partner entities of the
+scheduling agreement and contract APIs also return purchase order numbers; only numbers found as a header count.
+
+Filters use the 10-digit SAP number (`Partner.kunnr_sap` / `lifnr_sap`); the services accept it with or without
+leading zeros but return numbers **without** them, so results are compared via `same_number`.
+
+Areas whose API is not available (HTTP 403/404) are reported as **nicht geprüft**, never as passed – after the
+activation of all services above there are none left; the lists `NOT_AVAILABLE_CUSTOMER` / `NOT_AVAILABLE_VENDOR` in
+`backend/partner/deletion_check.py` stay for future areas. The result is *Löschen nicht möglich* (open documents),
+*unvollständig* (no open documents in the checked areas, but areas not checked or failed) or *keine offenen Belege*;
+warnings never block. The dialog shows business texts only – no service names or SAP error messages; the
+response still carries `service` (and `error` for failed areas), and failures are logged with service and SAP message.
 
 ## OpenAI endpoint
 
