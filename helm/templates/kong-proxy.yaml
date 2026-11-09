@@ -10,21 +10,4 @@ spec:
     - name: http
       port: {{ .Values.kong.port }}
       targetPort: {{ .Values.kong.port }}
----
-apiVersion: discovery.k8s.io/v1
-kind: EndpointSlice
-metadata:
-  name: {{ include "mpm.fullname" . }}-kong
-  labels:
-    {{- include "mpm.labels" . | nindent 4 }}
-    kubernetes.io/service-name: {{ include "mpm.fullname" . }}-kong
-    endpointslice.kubernetes.io/managed-by: helm
-addressType: IPv4
-ports:
-  - name: http
-    port: {{ .Values.kong.port }}
-    protocol: TCP
-endpoints:
-  - addresses:
-      - {{ .Values.kong.address | quote }}
 {{- end }}
