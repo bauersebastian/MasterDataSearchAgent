@@ -9,6 +9,7 @@ visualization, an AI duplicate check and posting a material to SAP.
   (List Report style) and material object page (`sap.uxap.ObjectPageLayout`).
 - **data/chroma/** – the Chroma vector DB with the embeddings of all materials. It is not part of the repository:
   build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
+- **helm/** – Helm chart for the Kubernetes deployment (see *Kubernetes*).
 
 ## Setup
 
@@ -50,6 +51,31 @@ docker run \
 
 `.env` is not part of the image and has to be passed at runtime. `input/` is part of the image, the volume keeps the
 vector DB. With a new extract, build the image and run the indexer again.
+
+## Kubernetes
+
+The chart in `helm/` is meant to be deployed by ArgoCD from `main` into the namespace `mpm-search`, like
+the research agent (`apps/mpm-research.yaml` in the argocd repo).
+
+These secrets are not part of the chart and have to exist in the namespace:
+
+- `mpm-search-secrets`: `OPENAI_API_KEY`, `SAP_USER`, `SAP_PASSWORD`
+- `gitlab-registry-secret`: pull secret for the image registry
+
+The vector DB lives on a PVC (`/app/data`). An init container runs the indexer before every start of the
+app, so after a new image (e.g. with a new extract in `input/`) only new or changed materials are embedded.
+The first start embeds all materials and takes a few minutes.
+
+To deploy a new version, build and push the image, then set `image.tag` in
+`helm/values.yaml` to the first 8 characters of the commit hash.
+
+The app has no login, so the Ingress is disabled (`ingress.enabled: false`).
+Do not enable it before authentication is in place. Access it with:
+
+```bash
+kubectl port-forward service/mpm-search 8000:80 \
+  --namespace mpm-search
+```
 
 ## Search
 
