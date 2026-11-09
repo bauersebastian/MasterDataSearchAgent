@@ -209,9 +209,14 @@ partners):
 | Sales orders | `API_SALES_ORDER_SRV` | overall processing status not *C* (completed) – also delivered but not yet billed orders, and orders without delivery-relevant items |
 | Quotations | `API_SALES_QUOTATION_SRV` | not completed and still valid; expired quotations are only a warning |
 | Billing documents | `API_BILLING_DOCUMENT_SRV` | not cancelled, sold-to or payer, not transferred to accounting (transfer status not *C* / *D* / *E*) |
+| Open items customer / supplier (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the customer (account type *D*) or supplier (*K*) account, all company codes, incl. special G/L (down payments); noted items (category *S*, e.g. down payment requests) only as a warning; the summary shows the balance of the open items |
 
-Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: open items
-of the customer / vendor (FI), deliveries without goods issue, contracts, scheduling agreements, returns, credit memo
+The FI check runs for the supplier role as well. Filters use the 10-digit SAP number (`Partner.kunnr_sap` /
+`lifnr_sap`); the services accept it with or without leading zeros but return numbers **without** them, so results
+are compared via `same_number`.
+
+Areas whose API is not active on fis127 (HTTP 403) are reported as **nicht geprüft**, never as passed: deliveries
+without goods issue, contracts, scheduling agreements, returns, credit memo
 requests and, for vendors, purchase orders. The result is *Löschen nicht möglich* (open documents),
 *unvollständig* (no open documents in the checked areas, but areas not checked) or *keine offenen Belege*. Once the
 missing services are activated in `/IWFND/MAINT_SERVICE`, the checks can be added in `backend/partner/deletion_check.py`.

@@ -31,7 +31,7 @@
                   <Column width="6.5rem" minScreenWidth="Tablet" demandPopin="true"><Text text="Datum"/></Column>
                   <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Rolle des Partners"/></Column>
                   <Column><Text text="Status"/></Column>
-                  <Column hAlign="End" width="8rem" minScreenWidth="Tablet" demandPopin="true"><Text text="Nettowert"/></Column>
+                  <Column hAlign="End" width="8rem" minScreenWidth="Tablet" demandPopin="true"><Text text="Betrag"/></Column>
                   <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Info"/></Column>
                 </columns>
                 <items>

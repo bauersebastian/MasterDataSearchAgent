@@ -147,14 +147,21 @@ class Partner:
 
     @property
     def kunnr_sap(self) -> str:
-        """Customer number as stored in SAP (KNA1-KUNNR, 10 digits) -- use this in OData filters, not the display form,
-        so the query does not depend on the service applying the ALPHA conversion exit."""
+        """Customer number as stored in SAP (KNA1-KUNNR, 10 digits), for OData filters. The services return partner
+        numbers without leading zeros, so compare results via `same_number`, never with ==."""
         number = self.customer.get("KUNNR", "")
         return pad(number, 10) if number else ""
 
     @property
     def lifnr(self) -> str:
+        """Supplier number for display (leading zeros stripped)."""
         return strip_zeros(self.vendor.get("LIFNR", ""))
+
+    @property
+    def lifnr_sap(self) -> str:
+        """Supplier number as stored in SAP (LFA1-LIFNR, 10 digits), for OData filters."""
+        number = self.vendor.get("LIFNR", "")
+        return pad(number, 10) if number else ""
 
     @property
     def deleted(self) -> bool:

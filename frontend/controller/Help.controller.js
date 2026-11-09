@@ -124,7 +124,8 @@ sap.ui.define([
         <p><strong>Löschprüfung</strong> prüft auf Knopfdruck (nur lesend, live aus SAP), ob noch offene Belege den
         Partner verwenden – in <em>jeder</em> Partnerrolle (Auftraggeber, Warenempfänger, Rechnungsempfänger, Regulierer):
         nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis) und Fakturen, die noch nicht an die
-        Buchhaltung übergeben sind. Bereiche ohne freigeschaltete Schnittstelle (offene Posten, Lieferungen, Kontrakte,
+        Buchhaltung übergeben sind, dazu offene Posten des Debitoren- bzw. Kreditorenkontos (FI, alle Buchungskreise,
+        mit Saldo; Merkposten wie Anzahlungsanforderungen nur als Hinweis). Bereiche ohne freigeschaltete Schnittstelle (Lieferungen, Kontrakte,
         Lieferpläne, Retouren, Gutschriftsanforderungen, bei Lieferanten Bestellungen) erscheinen als <em>nicht
         geprüft</em> – das Ergebnis ist dann „unvollständig“, nie „in Ordnung“.</p>`
     },

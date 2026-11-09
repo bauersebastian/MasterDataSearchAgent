@@ -7,6 +7,13 @@ Checked (customer role):
   (sold-to, ship-to, bill-to, payer, ...), header and item partners
 - sales quotations not completed, any partner function; expired quotations only as a warning
 - billing documents not (yet) posted to accounting (transfer status not C / D / E, not cancelled), sold-to or payer
+- open FI items of the customer account (API_OPLACCTGDOCITEMCUBE_SRV); noted items (down payment requests) only as a hint
+
+Checked (supplier role):
+- open FI items of the supplier account, same service
+
+Partner numbers: filters use the 10-digit SAP number; the services return numbers without leading zeros, so results
+are compared via `same_number`.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -27,7 +34,6 @@ TRANSFER_STATUS = {"": "Buchungsbeleg nicht erzeugt", "A": "für Übergabe an FI
 
 # areas that would belong to a complete check but whose API is not available in the system yet
 NOT_AVAILABLE_CUSTOMER = [
-    ("receivables", "Offene Posten / Saldo Debitor (FI)", "API_OPLACCTGDOCITEMCUBE_SRV"),
     ("deliveries", "Lieferungen ohne Warenausgang", "API_OUTBOUND_DELIVERY_SRV;v=0002"),
     ("contracts", "Kontrakte", "API_SALES_CONTRACT_SRV"),
     ("scheduling_agreements", "Lieferpläne", "API_SALES_SCHEDULING_AGREEMENT"),
@@ -36,8 +42,16 @@ NOT_AVAILABLE_CUSTOMER = [
 ]
 NOT_AVAILABLE_VENDOR = [
     ("purchase_orders", "Offene Bestellungen", "API_PURCHASEORDER_PROCESS_SRV"),
-    ("payables", "Offene Posten / Saldo Kreditor (FI)", "API_OPLACCTGDOCITEMCUBE_SRV"),
 ]
+
+
+FI_SERVICE, FI_ENTITY = "API_OPLACCTGDOCITEMCUBE_SRV", "A_OperationalAcctgDocItemCube"
+SPECIAL_GL = {"A": "Anzahlung", "F": "Anzahlungsanforderung", "D": "Rabattrückstellung", "W": "Wechsel"}
+
+
+def same_number(a: str, b: str) -> bool:
+    """Partner numbers equal regardless of leading zeros ('1001591' == '0001001591')."""
+    return strip_zeros(a or "") == strip_zeros(b or "")
 
 
 def role_text(code: str) -> str:
@@ -79,7 +93,7 @@ def check_sales_orders(customer: str) -> dict:
         "status": f"{PROCESS_STATUS.get(r['OverallSDProcessStatus'], r['OverallSDProcessStatus'])}"
                   + (f", {DELIVERY_STATUS[r['OverallDeliveryStatus']]}" if r["OverallDeliveryStatus"] in DELIVERY_STATUS else ""),
         "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
-        "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if r["SoldToParty"] != customer else r["PurchaseOrderByCustomer"],
+        "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else r["PurchaseOrderByCustomer"],
         "blocking": True,
     } for r in rows]
     return result("sales_orders", "Kundenaufträge (nicht erledigt)", "API_SALES_ORDER_SRV", documents,
@@ -104,7 +118,7 @@ def check_quotations(customer: str) -> dict:
             "status": PROCESS_STATUS.get(r["OverallSDProcessStatus"], r["OverallSDProcessStatus"])
                       + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else ""),
             "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
-            "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if r["SoldToParty"] != customer else "",
+            "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if not same_number(r["SoldToParty"], customer) else "",
             "blocking": not expired,
         })
     return result("quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV", documents,
@@ -120,13 +134,64 @@ def check_billing(customer: str) -> dict:
                    "AccountingTransferStatus,SoldToParty,PayerParty"}))
     documents = [{
         "number": r["BillingDocument"], "type": r["BillingDocumentType"], "date": odata_date(r["BillingDocumentDate"]),
-        "roles": [role_text(f) for f, p in (("AG", r["SoldToParty"]), ("RG", r["PayerParty"])) if p == customer],
+        "roles": [role_text(f) for f, p in (("AG", r["SoldToParty"]), ("RG", r["PayerParty"])) if same_number(p, customer)],
         "status": TRANSFER_STATUS.get(r["AccountingTransferStatus"], f"Status {r['AccountingTransferStatus']}"),
         "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"], "info": "",
         "blocking": True,
     } for r in rows]
     return result("billing", "Fakturen nicht an die Buchhaltung übergeben", "API_BILLING_DOCUMENT_SRV", documents,
                   "Auftraggeber oder Regulierer, nicht storniert")
+
+
+def open_items(field: str, account_type: str, number: str) -> list[dict]:
+    """Open (not cleared) FI items of a customer (field Customer, type D) or supplier (Supplier, K) account."""
+    rows = odata.get_all(FI_SERVICE, FI_ENTITY, {
+        "$filter": f"{field} eq {odata.quote(number)} and FinancialAccountType eq '{account_type}' and IsCleared eq false",
+        "$select": "CompanyCode,AccountingDocument,FiscalYear,AccountingDocumentItem,AccountingDocumentType,PostingDate,"
+                   "NetDueDate,AmountInCompanyCodeCurrency,CompanyCodeCurrency,SpecialGLCode,AccountingDocumentCategory,"
+                   "DocumentItemText,AssignmentReference"})
+    today = date.today().isoformat()
+    documents = []
+    for r in rows:
+        due = odata_date(r["NetDueDate"])
+        noted = r["AccountingDocumentCategory"] == "S"   # noted item: not posted to the balance
+        special = r["SpecialGLCode"]
+        documents.append({
+            "number": f"{r['AccountingDocument']}/{r['FiscalYear']}", "type": r["AccountingDocumentType"],
+            "date": odata_date(r["PostingDate"]),
+            "roles": [f"Sonderhauptbuch {special}" + (f" {SPECIAL_GL[special]}" if special in SPECIAL_GL else "")] if special else [],
+            "status": ("Merkposten, " if noted else "offen, ")
+                      + (f"fällig seit {due}" if due and due < today else f"fällig am {due}" if due else "ohne Fälligkeit"),
+            "amount": float(r["AmountInCompanyCodeCurrency"] or 0), "currency": r["CompanyCodeCurrency"],
+            "info": " · ".join(x for x in (f"Buchungskreis {r['CompanyCode']}", r["AssignmentReference"].lstrip("0"),
+                                           r["DocumentItemText"]) if x),
+            "blocking": not noted,
+        })
+    return documents
+
+
+def balance(documents: list[dict]) -> str:
+    totals: dict[str, float] = {}
+    for d in documents:
+        if d["blocking"]:
+            totals[d["currency"]] = totals.get(d["currency"], 0) + d["amount"]
+    return ", ".join(f"{a:,.2f} {c}".replace(",", "X").replace(".", ",").replace("X", ".") for c, a in sorted(totals.items()))
+
+
+def check_receivables(customer: str) -> dict:
+    documents = open_items("Customer", "D", customer)
+    saldo = balance(documents)
+    return result("receivables", "Offene Posten Debitor (FI)", FI_SERVICE, documents,
+                  "nicht ausgeglichene Posten des Debitorenkontos, alle Buchungskreise; Merkposten nur als Hinweis"
+                  + (f"; Saldo offene Posten {saldo}" if saldo else ""))
+
+
+def check_payables(supplier: str) -> dict:
+    documents = open_items("Supplier", "K", supplier)
+    saldo = balance(documents)
+    return result("payables", "Offene Posten Kreditor (FI)", FI_SERVICE, documents,
+                  "nicht ausgeglichene Posten des Kreditorenkontos, alle Buchungskreise; Merkposten nur als Hinweis"
+                  + (f"; Saldo offene Posten {saldo}" if saldo else ""))
 
 
 def result(check_id: str, title: str, service: str, documents: list[dict], scope: str) -> dict:
@@ -140,9 +205,9 @@ def result(check_id: str, title: str, service: str, documents: list[dict], scope
             "scope": scope, "documents": documents}
 
 
-def run_check(fn, check_id: str, title: str, service: str, customer: str) -> dict:
+def run_check(fn, check_id: str, title: str, service: str, number: str) -> dict:
     try:
-        return fn(customer)
+        return fn(number)
     except odata.SapError as e:
         status = "not_checked" if e.status_code in (401, 403, 404) else "error"
         return {"id": check_id, "title": title, "service": service, "status": status, "documents": [],
@@ -157,13 +222,20 @@ def not_available(items: list[tuple[str, str, str]]) -> list[dict]:
 
 
 def check(partner: Partner) -> dict:
-    checks: list[dict] = []
+    runs = []
     if partner.kunnr:
-        runs = [(check_sales_orders, "sales_orders", "Kundenaufträge (nicht erledigt)", "API_SALES_ORDER_SRV"),
-                (check_quotations, "quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV"),
-                (check_billing, "billing", "Fakturen nicht an die Buchhaltung übergeben", "API_BILLING_DOCUMENT_SRV")]
+        runs += [(check_sales_orders, "sales_orders", "Kundenaufträge (nicht erledigt)", "API_SALES_ORDER_SRV", partner.kunnr_sap),
+                 (check_quotations, "quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV", partner.kunnr_sap),
+                 (check_billing, "billing", "Fakturen nicht an die Buchhaltung übergeben", "API_BILLING_DOCUMENT_SRV",
+                  partner.kunnr_sap),
+                 (check_receivables, "receivables", "Offene Posten Debitor (FI)", FI_SERVICE, partner.kunnr_sap)]
+    if partner.lifnr:
+        runs += [(check_payables, "payables", "Offene Posten Kreditor (FI)", FI_SERVICE, partner.lifnr_sap)]
+    checks: list[dict] = []
+    if runs:
         with ThreadPoolExecutor(len(runs)) as pool:
-            checks += list(pool.map(lambda r: run_check(r[0], r[1], r[2], r[3], partner.kunnr_sap), runs))
+            checks += list(pool.map(lambda r: run_check(*r), runs))
+    if partner.kunnr:
         checks += not_available(NOT_AVAILABLE_CUSTOMER)
     if partner.lifnr:
         checks += not_available(NOT_AVAILABLE_VENDOR)
