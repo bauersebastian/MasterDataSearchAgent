@@ -94,7 +94,7 @@ def get_open_orders(partner: str) -> dict:
     if not (os.getenv("SAP_USER") and os.getenv("SAP_PASSWORD")):
         raise HTTPException(500, "SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert")
     try:
-        return orders.open_orders(p.kunnr)
+        return orders.open_orders(p.kunnr_sap)
     except orders.SapError as e:
         raise HTTPException(502, str(e)) from e
 

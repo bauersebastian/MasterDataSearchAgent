@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 from .. import odata
+from ..tables import strip_zeros
 from .data import Partner
 from .orders import DELIVERY_STATUS, odata_date
 
@@ -78,7 +79,7 @@ def check_sales_orders(customer: str) -> dict:
         "status": f"{PROCESS_STATUS.get(r['OverallSDProcessStatus'], r['OverallSDProcessStatus'])}"
                   + (f", {DELIVERY_STATUS[r['OverallDeliveryStatus']]}" if r["OverallDeliveryStatus"] in DELIVERY_STATUS else ""),
         "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
-        "info": f"Auftraggeber {r['SoldToParty']}" if r["SoldToParty"] != customer else r["PurchaseOrderByCustomer"],
+        "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if r["SoldToParty"] != customer else r["PurchaseOrderByCustomer"],
         "blocking": True,
     } for r in rows]
     return result("sales_orders", "Kundenaufträge (nicht erledigt)", "API_SALES_ORDER_SRV", documents,
@@ -103,7 +104,7 @@ def check_quotations(customer: str) -> dict:
             "status": PROCESS_STATUS.get(r["OverallSDProcessStatus"], r["OverallSDProcessStatus"])
                       + (f", abgelaufen am {valid_to}" if expired else f", gültig bis {valid_to}" if valid_to else ""),
             "amount": float(r["TotalNetAmount"] or 0), "currency": r["TransactionCurrency"],
-            "info": f"Auftraggeber {r['SoldToParty']}" if r["SoldToParty"] != customer else "",
+            "info": f"Auftraggeber {strip_zeros(r['SoldToParty'])}" if r["SoldToParty"] != customer else "",
             "blocking": not expired,
         })
     return result("quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV", documents,
@@ -162,7 +163,7 @@ def check(partner: Partner) -> dict:
                 (check_quotations, "quotations", "Angebote (nicht erledigt)", "API_SALES_QUOTATION_SRV"),
                 (check_billing, "billing", "Fakturen nicht an die Buchhaltung übergeben", "API_BILLING_DOCUMENT_SRV")]
         with ThreadPoolExecutor(len(runs)) as pool:
-            checks += list(pool.map(lambda r: run_check(r[0], r[1], r[2], r[3], partner.kunnr), runs))
+            checks += list(pool.map(lambda r: run_check(r[0], r[1], r[2], r[3], partner.kunnr_sap), runs))
         checks += not_available(NOT_AVAILABLE_CUSTOMER)
     if partner.lifnr:
         checks += not_available(NOT_AVAILABLE_VENDOR)

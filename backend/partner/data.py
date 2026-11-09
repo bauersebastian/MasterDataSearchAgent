@@ -8,7 +8,7 @@ from datetime import date
 from functools import cached_property, lru_cache
 
 from ..config import PARTNER_INPUT_DIR
-from ..tables import read_table, strip_zeros
+from ..tables import pad, read_table, strip_zeros
 
 TYPES = {"1": "Person", "2": "Organisation", "3": "Gruppe"}
 TITLES = {"0001": "Frau", "0002": "Herr", "0003": "Firma", "0004": "Herr und Frau"}
@@ -142,7 +142,15 @@ class Partner:
 
     @property
     def kunnr(self) -> str:
+        """Customer number for display (leading zeros stripped)."""
         return strip_zeros(self.customer.get("KUNNR", ""))
+
+    @property
+    def kunnr_sap(self) -> str:
+        """Customer number as stored in SAP (KNA1-KUNNR, 10 digits) -- use this in OData filters, not the display form,
+        so the query does not depend on the service applying the ALPHA conversion exit."""
+        number = self.customer.get("KUNNR", "")
+        return pad(number, 10) if number else ""
 
     @property
     def lifnr(self) -> str:

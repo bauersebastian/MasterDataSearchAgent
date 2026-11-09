@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timezone
 
 from .. import odata
+from ..tables import strip_zeros
 from ..config import ORDERS_LIMIT, SAP_CLIENT, SAP_ODATA_URL
 
 SapError = odata.SapError
@@ -22,7 +23,7 @@ def odata_date(value: str | None) -> str:
 
 
 def open_orders(customer: str) -> dict:
-    """Open sales orders where the customer is the sold-to party, newest first."""
+    """Open sales orders where the customer (SAP-internal number, 10 digits) is the sold-to party, newest first."""
     data = odata.get("API_SALES_ORDER_SRV", "A_SalesOrder", {
         "$inlinecount": "allpages",
         "$top": str(ORDERS_LIMIT),
@@ -56,6 +57,6 @@ def open_orders(customer: str) -> dict:
             "billing_block": r.get("HeaderBillingBlockReason", ""),
         })
     count = int(data.get("__count") or len(orders))
-    return {"customer": customer, "orders": orders, "count": count, "truncated": count > len(orders),
+    return {"customer": strip_zeros(customer), "orders": orders, "count": count, "truncated": count > len(orders),
             "totals": [{"currency": c, "amount": round(a, 2)} for c, a in sorted(totals.items())],
             "source": f"{SAP_ODATA_URL}/API_SALES_ORDER_SRV (Mandant {SAP_CLIENT})"}
