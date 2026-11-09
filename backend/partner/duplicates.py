@@ -105,15 +105,15 @@ def candidates(partner: str, limit: int = DUPLICATE_CANDIDATES) -> dict:
                     signals[pid]["strong"] = True
 
     # customer <-> vendor cross references (KNA1-LIFNR / LFA1-KUNNR) pointing to another partner
-    refs = {p.customer.get("LIFNR", "").lstrip("0"): "Kunde verweist auf Lieferant",
-            p.vendor.get("KUNNR", "").lstrip("0"): "Lieferant verweist auf Kunde"}
+    refs = {p.customer.get("LIFNR", "").lstrip("0"): "als Lieferant {} beim Kunden " + p.kunnr + " hinterlegt",
+            p.vendor.get("KUNNR", "").lstrip("0"): "als Kunde {} beim Lieferanten " + p.lifnr + " hinterlegt"}
     for other in partners.values():
         if other.id == p.id:
             continue
         for number, text in refs.items():
             if number and number in (other.lifnr, other.kunnr):
                 fused[other.id] += 1
-                signals[other.id]["shared"].append(f"{text} {number}")
+                signals[other.id]["shared"].append(text.format(number))
                 signals[other.id]["strong"] = True
 
     # persons: same name and birth date
@@ -218,8 +218,12 @@ LINK_NAME_SIMILARITY = 0.8
 _overview_lock = threading.Lock()
 
 
+# 'als Kunde 10023 beim Lieferanten 70001 hinterlegt' -> group 1 = 'Kunde', 2 = 'Lieferanten'
+CROSS_REFERENCE = re.compile(r"als (Kunde|Lieferant) \S+ beim (Lieferanten|Kunden) \S+ hinterlegt$")
+
+
 def _cross_reference(pair: dict) -> bool:
-    return any(s.startswith(("Kunde verweist", "Lieferant verweist")) for s in pair["shared"])
+    return any(CROSS_REFERENCE.match(s) for s in pair["shared"])
 
 
 def pair_tier(c: dict) -> int:
@@ -251,12 +255,13 @@ def _all_pairs() -> dict[frozenset, dict]:
     return pairs
 
 
-SIGNAL_LABELS = STRONG_KEYS + WEAK_KEYS + ("gleiche Adresse", "Kunde verweist auf Lieferant",
-                                          "Lieferant verweist auf Kunde", "Geburtsdatum")
+SIGNAL_LABELS = STRONG_KEYS + WEAK_KEYS + ("gleiche Adresse", "Geburtsdatum")
 
 
 def signal_label(signal: str) -> str:
     """'IBAN DE79...' -> 'IBAN' (the kind of the shared value, for the group summary)."""
+    if m := CROSS_REFERENCE.match(signal):
+        return f"als {m[1]} beim {m[2]} hinterlegt"
     return next((label for label in SIGNAL_LABELS if signal.startswith(label)), signal)
 
 
