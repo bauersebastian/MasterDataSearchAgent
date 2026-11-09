@@ -213,7 +213,7 @@ def assess(partner: str, candidate_ids: Optional[list[str]] = None) -> dict:
 # --- overview of all duplicate candidates ------------------------------------
 
 # tiers of a candidate pair, strongest evidence first
-TIERS = {1: "Starker Schlüssel", 2: "Gleiche Adresse", 3: "Ähnlicher Name", 4: "Nur semantisch"}
+TIERS = {1: "Gleiche Kennung", 2: "Gleiche Adresse", 3: "Ähnlicher Name", 4: "Nur semantisch"}
 LINK_NAME_SIMILARITY = 0.8
 _overview_lock = threading.Lock()
 

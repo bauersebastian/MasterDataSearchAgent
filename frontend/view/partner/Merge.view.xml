@@ -29,7 +29,7 @@
         <!-- 1: which partner is kept -->
         <WizardStep id="stepKeep" title="Partner behalten" icon="sap-icon://favorite" validated="{= !!${m>/keepValid} }">
           <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
-            text="Der behaltene Partner wird mit den besten Daten der anderen aktualisiert, die anderen erhalten eine Löschvormerkung oder Sperren. Vorschlag: nicht gelöscht/gesperrt, Kunde und Lieferant, meiste Infosätze, Ansprechpartner und Organisationen. Partner, die keine Dublette sind, hier abwählen."/>
+            text="Wählen Sie unter „Behalten“ den Partner, der bestehen bleibt. Er übernimmt die besten Daten der anderen; alle anderen einbezogenen Partner erhalten eine Löschvormerkung bzw. Sperren. Das Kennzeichen „Vorschlag“ markiert den Partner mit den vollständigsten Daten, die Begründung steht in der Spalte „Gründe Vorschlag“. Ist ein Partner keine Dublette, entfernen Sie den Haken bei „Einbeziehen“."/>
           <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom" visible="{= ${m>/log}.length > 0 }"
             text="{m>/logText}"/>
           <HBox alignItems="Center" visible="{= !!${m>/assessing} }" class="sapUiSmallMarginBottom">

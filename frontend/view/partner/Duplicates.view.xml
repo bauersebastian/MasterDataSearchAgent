@@ -31,8 +31,8 @@
           <FlexBox wrap="Wrap" alignItems="Center">
             <SegmentedButton selectedKey="{o>/maxTier}" selectionChange=".onTierChange" class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
               <items>
-                <SegmentedButtonItem key="1" text="Starker Schlüssel" icon="sap-icon://key"
-                  tooltip="Gleiche Steuernummer, IBAN, Identifikationsnummer, Geburtsdatum oder Kunde/Lieferant verweisen aufeinander"/>
+                <SegmentedButtonItem key="1" text="Gleiche Kennung" icon="sap-icon://key"
+                  tooltip="Beide Partner haben eine Nummer gemeinsam, die eindeutig zu einem Unternehmen oder einer Person gehört: Steuernummer, IBAN, Identifikations- oder externe Partnernummer, Geburtsdatum – oder Kunde und Lieferant verweisen aufeinander"/>
                 <SegmentedButtonItem key="2" text="+ Gleiche Adresse" icon="sap-icon://addresses"
                   tooltip="Zusätzlich: ähnlicher Name an derselben Adresse"/>
                 <SegmentedButtonItem key="3" text="+ Ähnlicher Name" icon="sap-icon://text"
@@ -44,7 +44,7 @@
             <CheckBox text="Gelöschte einbeziehen" selected="{o>/includeDeleted}" select=".onTierChange"
               class="sapUiSmallMarginEnd sapUiTinyMarginBottom"/>
             <CheckBox text="Nur gleicher Name" selected="{o>/sameNameOnly}" select=".applyFilter"
-              tooltip="Paare mit gemeinsamem Schlüssel, aber abweichendem Namen (meist Datenfehler) ausblenden"
+              tooltip="Paare mit gleicher Kennung, aber abweichendem Namen (meist Datenfehler) ausblenden"
               class="sapUiSmallMarginEnd sapUiTinyMarginBottom"/>
             <SearchField value="{o>/filter}" liveChange=".applyFilter" search=".applyFilter" width="20rem"
               placeholder="Gruppen filtern - Name, Partnernummer, Ort" class="sapUiTinyMarginBottom"/>
@@ -85,7 +85,7 @@
                   state="{= ${o>tier} === 1 ? 'Error' : ${o>tier} === 2 ? 'Warning' : ${o>tier} === 3 ? 'Information' : 'None' }"/>
                 <Text text="{= ${o>size} + ' Partner' + (${o>pairs}.length > 1 ? ' · ' + ${o>pairs}.length + ' Paare' : '') }"
                   class="mdsaStatus sapUiTinyMarginTop"/>
-                <ObjectStatus visible="{= !!${o>name_differs} }" text="abweichender Name – Schlüssel prüfen"
+                <ObjectStatus visible="{= !!${o>name_differs} }" text="abweichender Name – Kennung prüfen"
                   state="Warning" icon="sap-icon://warning" class="sapUiTinyMarginTop"/>
               </VBox>
               <VBox items="{path: 'o>partners', templateShareable: false}">

@@ -151,15 +151,16 @@ sap.ui.define([
         <strong>alle</strong> Partner aus – ohne KI – und zeigt die Partner, die wahrscheinlich mehrfach angelegt sind.
         Jedes Kandidatenpaar erhält die Stufe seines stärksten Hinweises:</p>
         <ul>
-          <li><strong>Starker Schlüssel:</strong> gleiche Steuernummer, IBAN, Identifikations- oder externe Partnernummer,
+          <li><strong>Gleiche Kennung:</strong> beide Partner haben eine Nummer gemeinsam, die eindeutig zu einem
+          Unternehmen oder einer Person gehört – gleiche Steuernummer, IBAN, Identifikations- oder externe Partnernummer,
           gleiches Geburtsdatum oder Kunde und Lieferant verweisen aufeinander</li>
           <li><strong>Gleiche Adresse:</strong> ähnlicher Name an derselben Adresse</li>
           <li><strong>Ähnlicher Name:</strong> nur der Name ist ähnlich (häufig auch Niederlassungen)</li>
           <li><strong>Nur semantisch:</strong> nur über die Embeddings ähnlich – viele Fehltreffer, daher standardmäßig aus</li>
         </ul>
         <p>Partner mit ähnlichem Namen werden zu <strong>Gruppen</strong> zusammengefasst (A ähnelt B, B ähnelt C → eine
-        Gruppe A, B, C). Paare mit gemeinsamem Schlüssel, aber <em>abweichendem Namen</em> sind meist Datenfehler (z. B.
-        kopierte Bankdaten) und erscheinen einzeln mit dem Hinweis <em>Schlüssel prüfen</em>.</p>
+        Gruppe A, B, C). Paare mit gleicher Kennung, aber <em>abweichendem Namen</em> sind meist Datenfehler (z. B.
+        kopierte Bankdaten) und erscheinen einzeln mit dem Hinweis <em>Kennung prüfen</em>.</p>
         <p>Ein Klick auf eine Partnernummer öffnet die Detailseite im Abschnitt <em>Dubletten</em>; dort lässt sich der
         Partner einzeln per <em>KI-Bewertung</em> prüfen. <em>CSV-Export</em> speichert die angezeigten Gruppen (eine Zeile je
         Partner), <em>Neu berechnen</em> ermittelt die Kandidaten neu.</p>`

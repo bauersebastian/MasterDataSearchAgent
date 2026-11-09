@@ -141,14 +141,14 @@ cached; *Neu berechnen* recomputes, e.g. after the vector index was rebuilt). No
 assessment stays on the partner page, where a click on a partner in the overview lands in the *Dubletten* section.
 Each relevant candidate pair is counted once and gets the tier of its strongest evidence:
 
-1. *Starker Schlüssel*: tax number, IBAN, ID number, external partner number, birth date, or customer / vendor cross reference
+1. *Gleiche Kennung*: shared identifier – tax number, IBAN, ID number, external partner number, birth date, or customer / vendor cross reference
 2. *Gleiche Adresse*: similar name (≥ 80 %) at the same address
 3. *Ähnlicher Name*: similar name only (often branches)
 4. *Nur semantisch*: similar embeddings only (many false hits, off by default)
 
 Pairs with a similar name are merged into groups (A–B and B–C → A, B, C). Pairs that share a key but have different
 names (usually copied test bank details or tax numbers) are not merged and stay separate, flagged *abweichender Name
-– Schlüssel prüfen*; *Nur gleicher Name* hides them. Filters: tier (default up to 3), deleted partners, text. The
+– Kennung prüfen*; *Nur gleicher Name* hides them. Filters: tier (default up to 3), deleted partners, text. The
 shown groups can be exported as CSV (one line per partner).
 
 ## Send to SAP
