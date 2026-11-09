@@ -66,8 +66,10 @@ The vector DB lives on a PVC (`/app/data`). An init container runs the indexer b
 app, so after a new image (e.g. with a new extract in `input/`) only new or changed materials are embedded.
 The first start embeds all materials and takes a few minutes.
 
-To deploy a new version, build and push the image, then set `image.tag` in
-`helm/values.yaml` to the first 8 characters of the commit hash.
+New versions are deployed by the GitLab pipeline. On every push to `main` it renders the chart, and if the
+app changed it builds and pushes the image and commits the new `image.tag` to `helm/values.yaml`
+(`[skip ci]`). ArgoCD picks that commit up. The pipeline needs the CI/CD variable `GITLAB_PUSH_TOKEN`
+(Project Access Token with `write_repository`).
 
 The app has no login of its own. The Ingress sends every request to Kong through the Service
 `mpm-search-kong`. Kong asks for basic auth (consumer `mpm`, same login as the research agent) and forwards to
