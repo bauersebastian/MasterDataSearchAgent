@@ -1,0 +1,74 @@
+# Requires CI/CD variable GITLAB_PUSH_TOKEN (Project Access Token, write_repository).
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - validate
+  - build
+  - bump-version
+
+variables:
+  IMAGE: ${CI_REGISTRY_IMAGE}
+
+.app_changes: &app_changes
+  - backend/**/*
+  - frontend/**/*
+  - input/**/*
+  - certs/**/*
+  - requirements.txt
+  - Dockerfile
+  - .dockerignore
+
+helm-render:
+  stage: validate
+  image:
+    name: alpine/helm:3.16.4
+    entrypoint: [""]
+  script:
+    - helm lint helm
+    - helm template mpm-search helm --namespace mpm-search
+
+build-image:
+  stage: build
+  image: docker:27
+  tags:
+    - dood
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - docker build
+        -t "$IMAGE:$CI_COMMIT_SHORT_SHA"
+        --build-arg HTTP_PROXY="${HTTP_PROXY:-}"
+        --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}"
+        --build-arg NO_PROXY="${NO_PROXY:-}"
+        .
+    - docker push "$IMAGE:$CI_COMMIT_SHORT_SHA"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: *app_changes
+
+update-helm-tag:
+  stage: bump-version
+  image: alpine:3.20
+  needs:
+    - build-image
+  before_script:
+    - apk add --no-cache git
+    - git config user.name "gitlab-ci"
+    - git config user.email "ci@fis-gmbh.de"
+    - git remote set-url origin "https://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}.git"
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+  script:
+    - sed -i -E
+        "/^image:/,/^[^[:space:]]/ s/^([[:space:]]+tag:).*/\1 \"${CI_COMMIT_SHORT_SHA}\"/"
+        helm/values.yaml
+    - git add helm/values.yaml
+    - git diff --cached --quiet && { echo "helm/values.yaml already up to date"; exit 0; }
+    - 'git commit -m "chore(helm): bump image tag to ${CI_COMMIT_SHORT_SHA} [skip ci]"'
+    - git push origin "HEAD:${CI_COMMIT_REF_NAME}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: *app_changes
