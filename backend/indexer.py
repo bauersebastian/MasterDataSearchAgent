@@ -3,6 +3,7 @@
     python -m backend.indexer                     # materials and business partners: new and changed ones (resumable)
     python -m backend.indexer partner             # only business partners (or: material)
     python -m backend.indexer partner --rebuild   # drop the collection and embed everything again
+    python -m backend.indexer --graph             # build the HNSW graph again from the stored embeddings
     python -m backend.indexer --check             # only measure the recall of the vector search (no embedding)
 
 Objects whose document did not change (content hash in the metadata) are skipped, so an interrupted run
@@ -69,6 +70,21 @@ def index(kind: str, rebuild: bool) -> None:
     print(f"Fertig: {col.count()} {label} im Vektorindex '{name}'")
 
 
+def graph(kind: str, force: bool) -> None:
+    """Build the HNSW graph again if its settings differ from the configured ones (or on request)."""
+    name, label = OBJECTS[kind]
+    if not vectordb.indexed_count(name) or not (force or vectordb.graph_outdated(name)):
+        return
+    built = vectordb.graph_settings(name)
+    print(f"{label}: HNSW-Graph neu aufbauen aus den gespeicherten Embeddings "
+          f"(M {built.get('max_neighbors')} -> {vectordb.HNSW['max_neighbors']}, "
+          f"ef_construction {built.get('ef_construction')} -> {vectordb.HNSW['ef_construction']}, "
+          f"ef_search {built.get('ef_search')} -> {vectordb.HNSW['ef_search']})")
+    started = time.time()
+    vectordb.rebuild_graph(name)
+    print(f"  fertig ({time.time() - started:.0f} s)")
+
+
 def check(kind: str) -> None:
     """Recall of the approximate (HNSW) nearest neighbour search against brute force."""
     name, label = OBJECTS[kind]
@@ -81,7 +97,8 @@ def check(kind: str) -> None:
     queries = list(dict.fromkeys(" ".join(o.document().split()[:3]) for o in sample))
     started = time.time()
     value = vectordb.recall(name, queries, RECALL_K)
-    note = "" if value >= RECALL_WARN else f" - unter {RECALL_WARN:.0%}, die Vektorsuche verfehlt nahe Treffer"
+    note = "" if value >= RECALL_WARN else (f" - unter {RECALL_WARN:.0%}, die Vektorsuche verfehlt nahe Treffer "
+                                             "(Graph neu aufbauen: --graph, ggf. MDSA_HNSW_* erhöhen)")
     print(f"{label}: Recall@{RECALL_K} der Vektorsuche {value:.1%} "
           f"({RECALL_SAMPLES} Stichproben, {time.time() - started:.0f} s){note}")
 
@@ -90,6 +107,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("objects", nargs="*", metavar="material|partner", help="objects to index (default: all)")
     parser.add_argument("--rebuild", action="store_true", help="delete the collection(s) and embed everything again")
+    parser.add_argument("--graph", action="store_true",
+                        help="build the HNSW graph again from the stored embeddings (no embedding calls)")
     parser.add_argument("--check", action="store_true", help="only measure the recall of the vector search")
     args = parser.parse_args()
     if unknown := set(args.objects) - set(OBJECTS):
@@ -98,6 +117,7 @@ def main() -> None:
         try:
             if not args.check:
                 index(kind, args.rebuild)
+                graph(kind, args.graph)
             check(kind)
         except FileNotFoundError as e:
             print(f"{OBJECTS[kind][1]} übersprungen: {e}")

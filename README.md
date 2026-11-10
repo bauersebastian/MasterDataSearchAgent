@@ -43,6 +43,12 @@ After indexing, the indexer measures the recall of the vector search: for 50 sho
 objects) it compares the 100 nearest neighbours returned by Chroma's approximate HNSW search with the exact ones
 (brute force) and warns below 95 %. `python -m backend.indexer --check` only runs this measurement.
 
+The HNSW graph is built with M = 32, ef_construction = 200, ef_search = 400 (`MDSA_HNSW_M`,
+`MDSA_HNSW_CONSTRUCTION_EF`, `MDSA_HNSW_SEARCH_EF`; Chroma's defaults 16 / 100 / 100 reached only ~90 % recall).
+When these settings differ from the ones a collection was built with, the indexer builds the graph again from the
+stored embeddings (no embedding calls, seconds for 15k objects); `--graph` forces this, e.g. after many incremental
+runs. A running server picks up the new collection automatically.
+
 Without `OPENAI_API_KEY` or without a built index the app still works with the fuzzy text search only and says so.
 
 ## Material search
