@@ -3,11 +3,13 @@
     python -m backend.indexer                     # materials and business partners: new and changed ones (resumable)
     python -m backend.indexer partner             # only business partners (or: material)
     python -m backend.indexer partner --rebuild   # drop the collection and embed everything again
+    python -m backend.indexer --check             # only measure the recall of the vector search (no embedding)
 
 Objects whose document did not change (content hash in the metadata) are skipped, so an interrupted run
 can simply be started again.
 """
 import argparse
+import random
 import sys
 import time
 
@@ -26,6 +28,7 @@ def load(kind: str) -> dict:
     return load_partners()
 
 
+RECALL_SAMPLES, RECALL_K, RECALL_WARN = 50, 100, 0.95
 OBJECTS = {"material": (MATERIAL_COLLECTION, "Materialien"), "partner": (PARTNER_COLLECTION, "Geschäftspartner")}
 
 
@@ -66,16 +69,36 @@ def index(kind: str, rebuild: bool) -> None:
     print(f"Fertig: {col.count()} {label} im Vektorindex '{name}'")
 
 
+def check(kind: str) -> None:
+    """Recall of the approximate (HNSW) nearest neighbour search against brute force."""
+    name, label = OBJECTS[kind]
+    if not vectordb.indexed_count(name):
+        print(f"{label}: Vektorindex '{name}' ist leer")
+        return
+    # short queries like a user types them: the first words of the documents of random objects
+    objects = list(load(kind).values())
+    sample = random.Random(42).sample(objects, min(RECALL_SAMPLES, len(objects)))
+    queries = list(dict.fromkeys(" ".join(o.document().split()[:3]) for o in sample))
+    started = time.time()
+    value = vectordb.recall(name, queries, RECALL_K)
+    note = "" if value >= RECALL_WARN else f" - unter {RECALL_WARN:.0%}, die Vektorsuche verfehlt nahe Treffer"
+    print(f"{label}: Recall@{RECALL_K} der Vektorsuche {value:.1%} "
+          f"({RECALL_SAMPLES} Stichproben, {time.time() - started:.0f} s){note}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("objects", nargs="*", metavar="material|partner", help="objects to index (default: all)")
     parser.add_argument("--rebuild", action="store_true", help="delete the collection(s) and embed everything again")
+    parser.add_argument("--check", action="store_true", help="only measure the recall of the vector search")
     args = parser.parse_args()
     if unknown := set(args.objects) - set(OBJECTS):
         parser.error(f"unbekanntes Objekt: {', '.join(sorted(unknown))} (material oder partner)")
     for kind in args.objects or list(OBJECTS):
         try:
-            index(kind, args.rebuild)
+            if not args.check:
+                index(kind, args.rebuild)
+            check(kind)
         except FileNotFoundError as e:
             print(f"{OBJECTS[kind][1]} übersprungen: {e}")
 

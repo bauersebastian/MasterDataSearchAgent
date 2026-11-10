@@ -11,7 +11,7 @@ Google-like search over two SAP master data objects, with an SAP Fiori (Horizon)
 
 The switch *Material | Geschäftspartner* above the search field changes the object; each search keeps its own query.
 
-- **backend/** – FastAPI service. Shared engine: `textsearch.py` (exact keys, BM25 with fuzzy expansion, RRF),
+- **backend/** – FastAPI service. Shared engine: `textsearch.py` (exact keys, BM25 with fuzzy expansion, hybrid scoring),
   `vectordb.py` (Chroma, one collection per object), `tables.py` (extract files), `llm.py`, `indexer.py`.
   One package per object with its data model, search, AI search and API router: `backend/material/`,
   `backend/partner/`.
@@ -39,6 +39,10 @@ only; `--rebuild` deletes the collection(s) and embeds everything (needed after 
 the newest file per table wins), run the indexer again. Folders: `MDSA_MATERIAL_INPUT_DIR`, `MDSA_PARTNER_INPUT_DIR`
 (material files directly in `input/`, as in older setups, are still found).
 
+After indexing, the indexer measures the recall of the vector search: for 50 short queries (the first words of random
+objects) it compares the 100 nearest neighbours returned by Chroma's approximate HNSW search with the exact ones
+(brute force) and warns below 95 %. `python -m backend.indexer --check` only runs this measurement.
+
 Without `OPENAI_API_KEY` or without a built index the app still works with the fuzzy text search only and says so.
 
 ## Material search
@@ -54,7 +58,7 @@ for the fuzzy text search, otherwise every assembly would match the words of its
 | **Exakt** (always) | material number (with or without leading zeros), EAN of MARA/MARM, vendor part number (EINA-IDNLF), old material number – ranked first |
 | **Unscharf** | probabilistic retrieval with BM25 over all texts and codes. Every query word is expanded to vocabulary terms: exact, prefix (*Verschr* → *Verschraubung*, search-as-you-type), compound part (*mutter* → *Gegenmutter*) and typo (rapidfuzz ≥ 80: *mesing* → *messing*). Umlauts are folded (*Duebel* = *Dübel*), codes are split (*6x45* = *6 x 45*), and documents covering more query words are strongly preferred. Offers *Meinten Sie …* for corrected words. |
 | **Semantisch** | `text-embedding-3-large` (1536 dimensions) in Chroma, cosine similarity – finds synonyms and descriptions (*Schraubenzieher* → *Schraubendreher*, *Befestigung für Porenbeton* → *Gasbetondübel*) |
-| **Hybrid** (default) | Reciprocal Rank Fusion (k = 60) of the fuzzy and the semantic ranking |
+| **Hybrid** (default) | candidates of both retrievers, each scored by both: relevance = 50 % fuzzy score + 50 % calibrated similarity (cosine 0.25 → 0 %, 0.75 and above → 100 %; `MDSA_HYBRID_SEMANTIC_WEIGHT`, `MDSA_SEMANTIC_FULL_SIMILARITY`). Fuzzy hits that the approximate vector search (HNSW) missed get their exact similarity from the stored embeddings. Without any fuzzy hit only the similarity counts |
 | **KI-Suche** | for requests in own words with requirements, e.g. *Veganes Waschmittel ohne Mikroplastik mit Inhaltsstoffen aus EU-Anbau*. 1) the LLM extracts the searched product, search keywords and the requirements; 2) the hybrid search retrieves 30 candidates with the keywords (completed by semantic hits of the whole request); 3) the LLM checks every candidate against each requirement **using only its master data** (texts, long texts, classes, features, units …, no general product knowledge): *belegt*, *nicht belegt* or *widerspricht*, with the evidence. Only *passend* / *teilweise* candidates are shown; an empty result is a valid answer. Two LLM calls per search (some seconds) |
 
 Every hit shows which retriever found it and with which score; the *?* button explains how the query words were

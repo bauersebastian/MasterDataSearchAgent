@@ -39,9 +39,13 @@ LANGUAGE = os.getenv("MDSA_LANGUAGE", "D")          # SAP language key of the di
 FALLBACK_LANGUAGES = ["D", "E", "F", "N"]           # if the material has no text in LANGUAGE
 EMBED_LANGUAGES = ["D", "E", "F", "N"]              # short texts that go into the embedded document
 CANDIDATES = 200          # hits per retriever before fusion
-RRF_K = 60                # Reciprocal Rank Fusion constant
+RRF_K = 60                # Reciprocal Rank Fusion constant (duplicate check)
 FUZZY_CUTOFF = 80         # min. rapidfuzz ratio (0-100) for a typo-tolerant token match
 MIN_SEMANTIC_SIMILARITY = 0.25   # semantic hits below this cosine similarity are dropped
+# Hybrid search: relevance = weighted sum of the lexical score (0-1) and the calibrated semantic similarity
+# (cosine MIN_SEMANTIC_SIMILARITY -> 0, SEMANTIC_FULL_SIMILARITY and above -> 1)
+HYBRID_SEMANTIC_WEIGHT = float(os.getenv("MDSA_HYBRID_SEMANTIC_WEIGHT", "0.5"))
+SEMANTIC_FULL_SIMILARITY = float(os.getenv("MDSA_SEMANTIC_FULL_SIMILARITY", "0.75"))
 MAX_RESULTS = 200
 
 # --- Duplicate check ------------------------------------------------------

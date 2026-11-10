@@ -1,5 +1,5 @@
 """Search engine shared by all master data objects: exact keys, probabilistic lexical matching (BM25 with fuzzy /
-prefix / compound term expansion) and semantic vector search (Chroma), combined with Reciprocal Rank Fusion.
+prefix / compound term expansion) and semantic vector search (Chroma), combined to one weighted score.
 
 A searchable object provides `id`, `search_text()` (everything a user may type) and `search_keys()`
 ([(label, [values])] for exact matches of numbers and codes)."""
@@ -13,7 +13,8 @@ from typing import Optional, Protocol
 from rapidfuzz import fuzz, process
 
 from . import vectordb
-from .config import CANDIDATES, FUZZY_CUTOFF, RRF_K
+from .config import (CANDIDATES, FUZZY_CUTOFF, HYBRID_SEMANTIC_WEIGHT, MIN_SEMANTIC_SIMILARITY,
+                     SEMANTIC_FULL_SIMILARITY)
 
 K1, B = 1.2, 0.75           # BM25 parameters
 FOLD = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "é": "e", "è": "e", "à": "a", "ç": "c"})
@@ -180,47 +181,63 @@ class Ranking:
     warnings: list[str]
 
 
+def calibrate(similarity: float) -> float:
+    """Cosine similarity -> 0..1: MIN_SEMANTIC_SIMILARITY (unrelated) is 0, SEMANTIC_FULL_SIMILARITY and above 1."""
+    span = SEMANTIC_FULL_SIMILARITY - MIN_SEMANTIC_SIMILARITY
+    return min(max((similarity - MIN_SEMANTIC_SIMILARITY) / span, 0.0), 1.0)
+
+
 def rank(idx: LexicalIndex, collection: str, query: str, mode: str, pool: int) -> Ranking:
-    """mode: hybrid | semantic | lexical. Exact key hits always come first; the rest is fused with RRF."""
+    """mode: hybrid | semantic | lexical. Exact key hits always come first.
+
+    Hybrid: the candidates of both retrievers are scored by both. Lexical hits that the (approximate) vector search
+    did not return get their exact similarity from the stored embeddings. The score is the weighted sum of the
+    lexical score and the calibrated similarity; without any lexical hit only the similarity counts."""
     query = query.strip()
     warnings = []
     exact = [(idx.ids[doc], label) for doc, label in idx.exact(query)]
     lexical, matched, per_token = ([], {}, [])
     if mode in ("hybrid", "lexical"):
         lexical, matched, per_token = idx.search(query, pool)
-    sem = []
+    lex = {idx.ids[doc]: score for doc, score in lexical}
+    sem: dict[str, float] = {}
     if mode in ("hybrid", "semantic"):
         if vectordb.indexed_count(collection):
-            sem = vectordb.query(collection, query, pool)
+            # ids missing in the lexical index: vector index older than the input files
+            sem = {oid: sim for oid, sim in vectordb.query(collection, query, pool) if oid in idx.pos}
+            if mode == "hybrid":
+                exact_ids = {oid for oid, _ in exact}   # a similarity to a number or code says nothing
+                missing = [oid for oid in lex if oid not in sem and oid not in exact_ids]
+                sem.update(vectordb.similarities(collection, query, missing))
         else:
             warnings.append("Der Vektorindex ist leer - semantische Suche nicht verfügbar "
                             "(python -m backend.indexer ausführen)")
 
-    fused: dict[str, float] = defaultdict(float)
-    info: dict[str, dict] = defaultdict(dict)
+    weight = HYBRID_SEMANTIC_WEIGHT if lex else 1.0
+
+    def score(oid: str) -> float:
+        if mode == "lexical":
+            return lex.get(oid, 0.0)
+        if mode == "semantic":
+            return sem.get(oid, 0.0)
+        return (1 - weight) * lex.get(oid, 0.0) + weight * calibrate(sem.get(oid, 0.0))
+
+    exact_rank = {}
     for r, (oid, label) in enumerate(exact):
-        fused[oid] += 1.0 + 1 / (r + 1)
-        info[oid].setdefault("exact", label)
-    for r, (doc, score) in enumerate(lexical):
-        fused[idx.ids[doc]] += 1 / (RRF_K + r + 1)
-        info[idx.ids[doc]]["lexical"] = round(score, 3)
-    for r, (oid, sim) in enumerate(sem):
-        if oid not in idx.pos:   # index older than the input files
-            continue
-        fused[oid] += 1 / (RRF_K + r + 1)
-        info[oid]["semantic"] = round(sim, 3)
-    best_possible = (2 if mode == "hybrid" else 1) / (RRF_K + 1)
+        exact_rank.setdefault(oid, (r, label))
+    candidates = list(dict.fromkeys([*exact_rank, *lex, *(sem if mode != "lexical" else ())]))
+    scores = {oid: score(oid) for oid in candidates}
+    # exact key hits first, then by score; equal scores keep the order lexical > semantic > id (deterministic)
+    order = sorted(candidates, key=lambda oid: (exact_rank.get(oid, (math.inf,))[0], -round(scores[oid], 6),
+                                                -lex.get(oid, 0.0), -sem.get(oid, 0.0), oid))
 
-    def relevance(score: float, i: dict) -> int:
-        """0-100 for display: the retriever's own score in single modes, the normalized RRF score in hybrid mode."""
-        if "exact" in i:
-            return 100
-        value = {"lexical": i.get("lexical"), "semantic": i.get("semantic")}.get(mode, score / best_possible)
-        return round(min(value or 0, 1) * 100)
+    def info(oid: str) -> dict:
+        s = sem.get(oid)
+        return {"exact": exact_rank[oid][1] if oid in exact_rank else None,
+                "lexical": round(lex[oid], 3) if oid in lex else None,
+                "semantic": round(s, 3) if s is not None else None}
 
-    hits = [(oid, relevance(score, info[oid]), {"exact": info[oid].get("exact"), "lexical": info[oid].get("lexical"),
-                                                 "semantic": info[oid].get("semantic")})
-            for oid, score in sorted(fused.items(), key=lambda x: -x[1])]
+    hits = [(oid, 100 if oid in exact_rank else round(min(scores[oid], 1) * 100), info(oid)) for oid in order]
     return Ranking(
         hits=hits,
         matched={idx.ids[doc]: terms for doc, terms in matched.items()},
