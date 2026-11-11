@@ -168,7 +168,7 @@ def similarities(name: str, text: str, ids: list[str]) -> dict[str, float]:
     return dict(zip(got["ids"], sims.tolist()))
 
 
-def recall(name: str, queries: list[str], k: int = 100, page: int = 10000) -> float:
+def recall(name: str, queries: list[str], k: int = 100, page: int = 1000) -> float:
     """Share of the true k nearest neighbours that the HNSW search returns for the query texts (true neighbours by
     brute force, read page-wise so that large collections fit in memory)."""
     col = collection(name)
