@@ -1,0 +1,314 @@
+<mvc:View controllerName="fis.mdsa.controller.partner.Partner"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:uxap="sap.uxap" xmlns:form="sap.ui.layout.form"
+  xmlns:core="sap.ui.core" xmlns:ng="sap.suite.ui.commons.networkgraph" xmlns:ngl="sap.suite.ui.commons.networkgraph.layout"
+  height="100%">
+  <uxap:ObjectPageLayout id="page" showFooter="false" upperCaseAnchorBar="false" busy="{p>/busy}"
+    busyIndicatorDelay="0" useIconTabBar="false" headerContentPinnable="true" toggleHeaderOnTitleClick="true">
+    <uxap:headerTitle>
+      <uxap:ObjectPageDynamicHeaderTitle>
+        <uxap:breadcrumbs>
+          <Breadcrumbs currentLocationText="Geschäftspartner {p>/partner}">
+            <Link text="Geschäftspartnersuche" press=".onBack"/>
+          </Breadcrumbs>
+        </uxap:breadcrumbs>
+        <uxap:expandedHeading>
+          <HBox alignItems="Center">
+            <core:Icon src="{p>/icon}" size="1.5rem" class="sapUiSmallMarginEnd"/>
+            <Title text="{p>/name}" wrapping="true"/>
+          </HBox>
+        </uxap:expandedHeading>
+        <uxap:snappedHeading>
+          <Title text="{p>/partner} · {p>/name}" wrapping="true"/>
+        </uxap:snappedHeading>
+        <uxap:expandedContent>
+          <Text text="{p>/type_text} · Geschäftspartner {p>/partner}"/>
+        </uxap:expandedContent>
+        <uxap:actions>
+          <Button text="An SAP senden" icon="sap-icon://upload-to-cloud" type="Emphasized" press=".onOpenSapDialog"
+            enabled="{= !${p>/busy} }"/>
+          <Button text="Dubletten prüfen" icon="sap-icon://compare" press=".onScrollToDuplicates"/>
+          <Button text="Löschprüfung" icon="sap-icon://delete" press=".onDeletionCheck" enabled="{= !${p>/busy} }"
+            tooltip="Offene Belege in SAP prüfen, die ein Löschen des Partners verhindern (nur lesend)"/>
+          <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
+        </uxap:actions>
+      </uxap:ObjectPageDynamicHeaderTitle>
+    </uxap:headerTitle>
+
+    <uxap:headerContent>
+      <FlexBox wrap="Wrap" fitContainer="true" alignItems="Start">
+        <VBox class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
+          <ObjectAttribute title="Partnertyp" text="{p>/type_text}"/>
+          <ObjectAttribute title="Gruppierung" text="{p>/group}"/>
+          <ObjectAttribute title="Suchbegriff" text="{= ${p>/search_term} || '-' }"/>
+        </VBox>
+        <VBox class="sapUiMediumMarginEnd sapUiSmallMarginBottom" width="20rem">
+          <ObjectAttribute title="Adresse" text="{= ${p>/address} || '-' }"/>
+          <ObjectAttribute title="E-Mail" text="{= ${p>/email} || '-' }"/>
+          <ObjectAttribute title="Telefon" text="{= ${p>/phone} || '-' }"/>
+        </VBox>
+        <VBox class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
+          <ObjectAttribute title="Kunde" text="{= ${p>/kunnr} ? ${p>/kunnr} + ' (' + ${p>/customer/KTOKD} + ')' : '-' }"/>
+          <ObjectAttribute title="Lieferant" text="{= ${p>/lifnr} ? ${p>/lifnr} + ' (' + ${p>/vendor/KTOKK} + ')' : '-' }"/>
+          <ObjectAttribute title="Steuernummer" text="{= ${p>/tax_number} || '-' }"/>
+        </VBox>
+        <VBox class="sapUiSmallMarginBottom">
+          <ObjectStatus title="Status" text="{= ${p>/deleted} ? 'Löschvormerkung' : (${p>/blocked} ? ${p>/blocks}.join(', ') : 'Aktiv') }"
+            state="{= ${p>/deleted} ? 'Error' : (${p>/blocked} ? 'Warning' : 'Success') }" inverted="true"/>
+          <HBox wrap="Wrap" class="mdsaBadges sapUiTinyMarginTop" items="{path: 'p>/roles', templateShareable: false}">
+            <ObjectStatus text="{p>}" state="{= ${p>} === 'Kunde' ? 'Indication06' : ${p>} === 'Lieferant' ? 'Indication07' : 'Information' }" class="sapUiTinyMarginEnd"/>
+          </HBox>
+        </VBox>
+      </FlexBox>
+    </uxap:headerContent>
+
+    <uxap:sections>
+      <uxap:ObjectPageSection title="Allgemein" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Allgemeine Daten (G000)" titleUppercase="false">
+            <form:SimpleForm id="generalForm" editable="false" layout="ColumnLayout" columnsM="2" columnsL="3" columnsXL="3"/>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Rollen (G100)" titleUppercase="false">
+            <Table items="{path: 'p>/role_rows', templateShareable: false}" noDataText="Keine Rollen">
+              <columns>
+                <Column width="8rem"><Text text="Rolle"/></Column>
+                <Column><Text text="Bezeichnung"/></Column>
+                <Column><Text text="Gültig ab"/></Column>
+                <Column><Text text="Gültig bis"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <Text text="{p>RLTYP}"/><Text text="{p>label}"/><Text text="{p>VALID_FROM}"/><Text text="{p>VALID_TO}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Adressen" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Adressen und Kommunikation" titleUppercase="false">
+            <Table items="{path: 'p>/addresses', templateShareable: false}" noDataText="Keine Adresse">
+              <headerToolbar>
+                <OverflowToolbar style="Clear"><Text class="mdsaStatus" text="Tabellen GADC, GAD2, GAD3, GAD6, GADU, G021"/></OverflowToolbar>
+              </headerToolbar>
+              <columns>
+                <Column><Text text="Adresse"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Telefon"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Fax"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="E-Mail / Web"/></Column>
+                <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Verwendung / Sprache"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <VBox>
+                    <Text text="{p>text}"/>
+                    <ObjectStatus text="Standardadresse" state="Information" visible="{p>default}"/>
+                    <Text text="{= ${p>region} ? 'Region ' + ${p>region} : '' }" class="mdsaStatus" visible="{= !!${p>region} }"/>
+                  </VBox>
+                  <Text text="{path: 'p>phones', formatter: '.phoneLines'}"/>
+                  <Text text="{path: 'p>faxes', formatter: '.phoneLines'}"/>
+                  <Text text="{parts: ['p>emails', 'p>urls'], formatter: '.lines'}"/>
+                  <Text text="{= ${p>usages}.join(', ') + (${p>language} ? ' · Sprache ' + ${p>language} : '') }"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection id="relationsSection" title="Beziehungen" titleUppercase="false"
+        visible="{= !!${p>/relations} &amp;&amp; ${p>/relations}.length > 0 }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Beziehungsgraph" titleUppercase="false">
+            <ng:Graph id="relationGraph" height="{= Math.min(Math.max((${p>/graph/nodes}.length || 1) * 70 + 120, 300), 1200) + 'px' }"
+              orientation="LeftRight" enableWheelZoom="false"
+              nodes="{path: 'p>/graph/nodes', templateShareable: false}" lines="{path: 'p>/graph/lines', templateShareable: false}"
+              noDataText="Keine Beziehungen">
+              <ng:layoutAlgorithm><ngl:LayeredLayout/></ng:layoutAlgorithm>
+              <ng:statuses>
+                <ng:Status key="current" title="Aktueller Partner" backgroundColor="sapUiListSelectionBackgroundColor" borderColor="sapUiAccent6" borderWidth="3px"/>
+                <ng:Status key="contact" title="Ansprechpartner" borderColor="sapUiAccent4" backgroundColor="sapUiTileBackground"/>
+                <ng:Status key="company" title="Unternehmen" borderColor="sapUiAccent8" backgroundColor="sapUiTileBackground"/>
+                <ng:Status key="other" title="Sonstige Beziehung" borderColor="sapUiAccent2" backgroundColor="sapUiTileBackground"/>
+                <ng:Status key="inactive" title="Nicht mehr gültig" borderColor="sapUiNeutralBorder" backgroundColor="sapUiTileBackground"/>
+              </ng:statuses>
+              <ng:nodes>
+                <ng:Node key="{p>key}" title="{p>title}" description="{p>description}" status="{p>status}" shape="Box"
+                  width="230" titleLineSize="2" showActionLinksButton="false" showExpandButton="false" icon="{p>icon}">
+                  <ng:attributes>
+                    <ng:ElementAttribute label="Partner" value="{p>key}"/>
+                  </ng:attributes>
+                  <ng:actionButtons>
+                    <ng:ActionButton icon="sap-icon://action" title="Geschäftspartner öffnen" press=".onGraphNodeOpen"/>
+                  </ng:actionButtons>
+                </ng:Node>
+              </ng:nodes>
+              <ng:lines>
+                <ng:Line from="{p>from}" to="{p>to}" title="{p>title}" description="{p>description}"/>
+              </ng:lines>
+            </ng:Graph>
+          </uxap:ObjectPageSubSection>
+          <uxap:ObjectPageSubSection title="Beziehungen und Ansprechpartner (G050, GRAC, GRA2, GRA3, GRA6)" titleUppercase="false">
+            <Table items="{path: 'p>/relations', templateShareable: false}">
+              <columns>
+                <Column width="11rem"><Text text="Beziehung"/></Column>
+                <Column><Text text="Partner"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Funktion / Abteilung"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Telefon / Fax"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="E-Mail"/></Column>
+                <Column minScreenWidth="Desktop" demandPopin="true" width="10rem"><Text text="Gültigkeit"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem type="Navigation" press=".onRelationPress" highlight="{= ${p>active} ? 'None' : 'Information' }">
+                  <VBox>
+                    <Text text="{p>label}"/>
+                    <Text text="{p>reltyp}" class="mdsaStatus"/>
+                  </VBox>
+                  <ObjectIdentifier title="{= ${p>name} || ${p>partner} }" text="{p>partner} · {p>type_text}"/>
+                  <VBox>
+                    <Text text="{p>function}" visible="{= !!${p>function} }"/>
+                    <Text text="{parts: ['p>function_code', 'p>department', 'p>department_code'], formatter: '.functionCodes'}" class="mdsaStatus"/>
+                  </VBox>
+                  <Text text="{parts: ['p>phones', 'p>faxes'], formatter: '.relationPhones'}"/>
+                  <Text text="{parts: ['p>emails'], formatter: '.lines'}"/>
+                  <VBox>
+                    <Text text="{p>valid_from} - {p>valid_to}"/>
+                    <ObjectStatus text="nicht mehr gültig" state="Warning" visible="{= !${p>active} }"/>
+                    <ObjectStatus text="Partner gelöscht" state="Error" visible="{= !!${p>other_deleted} }"/>
+                  </VBox>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Materialien" titleUppercase="false"
+        visible="{= !!${p>/material_list} &amp;&amp; ${p>/material_list}.length > 0 }">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Gelieferte Materialien" titleUppercase="false">
+            <Table items="{path: 'p>/material_list', templateShareable: false}" growing="true" growingThreshold="20"
+              growingScrollToLoad="false">
+              <headerToolbar>
+                <OverflowToolbar style="Clear">
+                  <Text class="mdsaStatus" text="{= ${p>/material_list}.length + ' Einkaufsinfosätze des Lieferanten ' + ${p>/lifnr} }"/>
+                </OverflowToolbar>
+              </headerToolbar>
+              <columns>
+                <Column width="9rem"><Text text="Material"/></Column>
+                <Column><Text text="Kurztext"/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Lieferanten-Teilenr."/></Column>
+                <Column minScreenWidth="Tablet" demandPopin="true" width="6rem"><Text text="Materialart"/></Column>
+                <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Infosatz"/></Column>
+              </columns>
+              <items>
+                <ColumnListItem type="Navigation" press=".onMaterialPress" highlight="{= ${p>deleted} ? 'Error' : 'None' }">
+                  <ObjectIdentifier title="{p>matnr}" text="{= ${p>deleted} ? 'Löschvormerkung' : '' }"/>
+                  <Text text="{p>text}"/><Text text="{p>idnlf}"/><Text text="{p>mtart}"/><Text text="{p>infnr}"/>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection id="duplicatesSection" title="Dubletten" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Dublettenprüfung" titleUppercase="false">
+            <VBox>
+              <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+                text="Kandidaten aus semantischer Nähe (Embeddings), Namensvergleich ohne Rechtsform, gleicher Adresse und gemeinsamen Schlüsseln (Steuernummer, IBAN, Identifikationsnr., E-Mail, Telefon, Webseite, Kunden-/Lieferanten-Verweis). Die KI-Bewertung per LLM unterscheidet echte Dubletten von verwandten Partnern (Niederlassung, Konzerngesellschaft, Ansprechpartner)."/>
+              <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+                visible="{= !!${d>/candidates} &amp;&amp; !${d>/semantic_available} }"
+                text="Vektorindex leer - Kandidaten nur aus Text-, Adress- und Schlüsselvergleich."/>
+              <MessageStrip visible="{= !!${d>/assessment} }" text="{d>/assessment/summary}" showIcon="true"
+                type="{= ${d>/duplicateFound} ? 'Warning' : 'Success' }" customIcon="sap-icon://ai"
+                class="sapUiSmallMarginBottom"/>
+              <MessageStrip type="Success" showIcon="true" class="sapUiSmallMarginBottom"
+                visible="{= !!${d>/candidates} &amp;&amp; !${d>/busy} &amp;&amp; ${d>/relevantCount} === 0 &amp;&amp; !${d>/assessment} }"
+                text="Keine relevante Dublette gefunden."/>
+              <Table items="{path: 'd>/shown', templateShareable: false}" busy="{d>/busy}" busyIndicatorDelay="0"
+                visible="{= !${d>/candidates} || ${d>/relevantCount} > 0 || !!${d>/showAll} }"
+                noDataText="Keine relevante Dublette gefunden">
+                <headerToolbar>
+                  <OverflowToolbar>
+                    <Title text="{= ${d>/showAll} ? 'Alle Kandidaten (' + (${d>/candidates} ? ${d>/candidates}.length : 0) + ')' : 'Relevante Kandidaten (' + (${d>/relevantCount} || 0) + ')' }" level="H3"/>
+                    <ToolbarSpacer/>
+                    <Button text="KI-Bewertung" icon="sap-icon://ai" type="Emphasized" press=".onAssess"
+                      enabled="{= !!${/config/openai_configured} &amp;&amp; !!${d>/shown} &amp;&amp; ${d>/shown}.length > 0 }"
+                      tooltip="Angezeigte Kandidaten vom LLM bewerten lassen"/>
+                    <Button text="Golden Record" icon="sap-icon://combine" press=".onGoldenRecord"
+                      enabled="{= !!${d>/duplicateFound} }"
+                      tooltip="Diesen Partner mit den von der KI als (mögliche) Dublette bewerteten Kandidaten zusammenführen"/>
+                  </OverflowToolbar>
+                </headerToolbar>
+                <columns>
+                  <Column width="9rem"><Text text="Partner"/></Column>
+                  <Column><Text text="Name"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Adresse"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Signale"/></Column>
+                  <Column hAlign="End" width="8rem"><Text text="Ähnlichkeit"/></Column>
+                  <Column minScreenWidth="Tablet" demandPopin="true"><Text text="KI-Bewertung"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem type="Navigation" press=".onCandidatePress"
+                    highlight="{= ${d>verdict/verdict} === 'Dublette' ? 'Error' : ${d>verdict/verdict} === 'Mögliche Dublette' ? 'Warning' : 'None' }">
+                    <ObjectIdentifier title="{d>partner}" text="{d>type_text}"/>
+                    <VBox>
+                      <Text text="{d>name}"/>
+                      <HBox wrap="Wrap" class="mdsaBadges" items="{path: 'd>roles', templateShareable: false}">
+                        <ObjectStatus text="{d>}" state="{= ${d>} === 'Kunde' ? 'Indication06' : ${d>} === 'Lieferant' ? 'Indication07' : 'Information' }" class="sapUiTinyMarginEnd"/>
+                      </HBox>
+                    </VBox>
+                    <Text text="{d>address}"/>
+                    <HBox wrap="Wrap" class="mdsaBadges">
+                      <HBox wrap="Wrap" items="{path: 'd>shared', templateShareable: false}">
+                        <ObjectStatus text="{d>}" state="Error" inverted="true" icon="sap-icon://chain-link" class="sapUiTinyMarginEnd"/>
+                      </HBox>
+                      <ObjectStatus visible="{= ${d>semantic} !== null }" text="{= 'Semantisch ' + Math.round(${d>semantic} * 100) + ' %' }"
+                        state="Information" inverted="true" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus text="{= 'Name ' + Math.round(${d>name_similarity} * 100) + ' %' }" state="Indication05"
+                        inverted="true" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= !!${d>other_place} }" text="anderer Ort" state="Warning" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= !${d>same_type} }" text="anderer Partnertyp" state="Warning" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= !!${d>related} }" text="steht in Beziehung" state="Information" icon="sap-icon://org-chart" class="sapUiTinyMarginEnd"/>
+                      <ObjectStatus visible="{= !!${d>deleted} }" text="Löschvormerkung" state="Error"/>
+                    </HBox>
+                    <ProgressIndicator percentValue="{d>score}" displayValue="{d>score} %" height="1.25rem"
+                      state="{= ${d>score} >= 90 ? 'Error' : ${d>score} >= 75 ? 'Warning' : 'None' }"/>
+                    <VBox>
+                      <ObjectStatus text="{d>verdict/verdict}" visible="{= !!${d>verdict} }"
+                        state="{= ${d>verdict/verdict} === 'Dublette' ? 'Error' : ${d>verdict/verdict} === 'Mögliche Dublette' ? 'Warning' : ${d>verdict/verdict} === 'Verwandt' ? 'Information' : 'Success' }"
+                        icon="{= ${d>verdict/verdict} === 'Dublette' ? 'sap-icon://error' : '' }"/>
+                      <Text text="{d>verdict/reason}" visible="{= !!${d>verdict} }" class="mdsaStatus"/>
+                    </VBox>
+                  </ColumnListItem>
+                </items>
+              </Table>
+              <Link visible="{= !!${d>/candidates} &amp;&amp; ${d>/candidates}.length > (${d>/relevantCount} || 0) }"
+                text="{= ${d>/showAll} ? 'Nur relevante Kandidaten anzeigen' : 'Alle ' + ${d>/candidates}.length + ' Kandidaten anzeigen (auch geringe Ähnlichkeit)' }"
+                press=".onToggleAllCandidates" class="sapUiSmallMarginTop"/>
+            </VBox>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Extraktdaten" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Alle Tabellen (Extrakt)" titleUppercase="false">
+            <VBox id="rawTables"/>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+
+      <uxap:ObjectPageSection title="Suchdokument" titleUppercase="false">
+        <uxap:subSections>
+          <uxap:ObjectPageSubSection title="Suchdokument (Vektor-DB)" titleUppercase="false">
+            <Text text="{p>/document}" class="mdsaDocument"/>
+          </uxap:ObjectPageSubSection>
+        </uxap:subSections>
+      </uxap:ObjectPageSection>
+    </uxap:sections>
+  </uxap:ObjectPageLayout>
+</mvc:View>

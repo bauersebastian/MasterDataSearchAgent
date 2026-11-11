@@ -10,6 +10,11 @@ sap.ui.define(["sap/ui/core/UIComponent", "sap/ui/model/json/JSONModel"], (UICom
         config: { loaded: false }, query: "", mode: "hybrid", mtart: [], matkl: [], vendor: [], includeDeleted: false,
         result: null, busy: false
       }));
+      // business partner search state (same idea, own filters)
+      this.setModel(new JSONModel({
+        query: "", mode: "hybrid", type: [], role: [], country: [], group: [], includeDeleted: false,
+        result: null, busy: false
+      }), "bp");
       fetch("api/config")
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status} ${r.statusText}`))))
         .then((config) => this.getModel().setProperty("/config", { ...config, loaded: true }))

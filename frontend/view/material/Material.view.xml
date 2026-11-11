@@ -1,4 +1,4 @@
-<mvc:View controllerName="fis.mdsa.controller.Material"
+<mvc:View controllerName="fis.mdsa.controller.material.Material"
   xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:uxap="sap.uxap" xmlns:form="sap.ui.layout.form"
   xmlns:core="sap.ui.core" xmlns:t="sap.ui.table" xmlns:trm="sap.ui.table.rowmodes"
   xmlns:ng="sap.suite.ui.commons.networkgraph" xmlns:ngl="sap.suite.ui.commons.networkgraph.layout" height="100%">
@@ -170,7 +170,11 @@
               </columns>
               <items>
                 <ColumnListItem highlight="{= ${m>LOEKZ} ? 'Error' : 'None' }">
-                  <Text text="{m>LIFNR}"/><Text text="{m>IDNLF}"/><Text text="{m>INFNR}"/>
+                  <HBox>
+                    <Link text="{m>LIFNR}" press=".onVendorPress" visible="{= !!${m>partner} }" tooltip="Geschäftspartner öffnen"/>
+                    <Text text="{m>LIFNR}" visible="{= !${m>partner} }"/>
+                  </HBox>
+                  <Text text="{m>IDNLF}"/><Text text="{m>INFNR}"/>
                   <Text text="{m>MEINS}"/><Text text="{m>URZLA}"/><Text text="{m>TELF1}"/>
                 </ColumnListItem>
               </items>

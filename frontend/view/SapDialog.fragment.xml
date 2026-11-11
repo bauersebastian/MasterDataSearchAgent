@@ -1,12 +1,12 @@
 <core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core" xmlns:code="sap.ui.codeeditor">
-  <Dialog id="sapDialog" title="Material {s>/matnr} an SAP senden" contentWidth="62rem" contentHeight="70%"
+  <Dialog id="sapDialog" title="{s>/label} an SAP senden" contentWidth="62rem" contentHeight="70%"
     resizable="true" draggable="true" busy="{s>/busy}" busyIndicatorDelay="0" afterClose=".onSapDialogClosed">
     <content>
       <VBox class="sapUiSmallMargin">
         <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
-          text="Das Material wird unverändert so gesendet, wie es im Extrakt gespeichert ist - alle Tabellen, alle befüllten Felder. Ziel: {/config/sap_endpoint}"/>
+          text="{s>/subject} wird unverändert so gesendet, wie {= ${s>/object} === 'partner' ? 'er' : 'es' } im Extrakt gespeichert ist - alle Tabellen, alle befüllten Felder. Ziel: {/config/sap_endpoint}{= ${s>/variant} ? ' · Variante ' + ${s>/variant} : '' }"/>
         <MessageStrip type="Warning" showIcon="true" visible="{= !!${s>/deleted} }" class="sapUiSmallMarginBottom"
-          text="Das Material hat eine Löschvormerkung."/>
+          text="{s>/subject} hat eine Löschvormerkung."/>
         <MessageStrip type="Error" showIcon="true" visible="{= !${/config/sap_configured} }" class="sapUiSmallMarginBottom"
           text="SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert - Senden nicht möglich."/>
         <HBox wrap="Wrap" items="{path: 's>/tables', templateShareable: false}" class="sapUiSmallMarginBottom">

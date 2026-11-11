@@ -1,14 +1,24 @@
 # Master Data Search Agent
 
-Google-like search over the SAP material master extract in `input/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA –
-14,372 materials – plus the bills of material STKO / STPO), with an SAP Fiori (Horizon) UI, BOM relationship
-visualization, an AI duplicate check and posting a material to SAP.
+Google-like search over two SAP master data objects, with an SAP Fiori (Horizon) UI:
 
-- **backend/** – FastAPI service: loads the input files, hybrid search, duplicate check; serves the frontend.
-- **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): search page
-  (List Report style) and material object page (`sap.uxap.ObjectPageLayout`).
-- **data/chroma/** – the Chroma vector DB with the embeddings of all materials. It is not part of the repository:
-  build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
+- **Material master** – extract in `input/MAT/` (MARA, MAKT, MARM, MECL, MEME, MTXT, EINA – 14,372 materials – plus
+  the bills of material STKO / STPO): BOM relationship visualization, AI duplicate check, posting a material to SAP.
+- **Business partners** – GPA extract in `input/GPA/` (G000 general data, G100 roles, GADC/GAD2/GAD3/GAD6/GADU
+  addresses and communication, G050/GRAC/GRA2/GRA3/GRA6 relationships and contact persons, GKA1/GKVP customer and
+  GLA1/GLT3 vendor data, G0BK bank details, GTAX tax numbers, G0ID identification numbers – 1,868 partners; table
+  descriptions in `input/GPA/objects.md`).
+
+The switch *Material | Geschäftspartner* above the search field changes the object; each search keeps its own query.
+
+- **backend/** – FastAPI service. Shared engine: `textsearch.py` (exact keys, BM25 with fuzzy expansion, hybrid scoring),
+  `vectordb.py` (Chroma, one collection per object), `tables.py` (extract files), `llm.py`, `indexer.py`.
+  One package per object with its data model, search, AI search and API router: `backend/material/`,
+  `backend/partner/`.
+- **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): `view/material/` and
+  `view/partner/` (search page in List Report style, object page `sap.uxap.ObjectPageLayout`), likewise `controller/`.
+- **data/chroma/** – the Chroma vector DB with the collections `materials` and `partners`. It is not part of the
+  repository: build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
 - **helm/** – Helm chart for the Kubernetes deployment (see *Kubernetes*).
 
 ## Setup
@@ -17,16 +27,28 @@ visualization, an AI duplicate check and posting a material to SAP.
 git clone ssh://git@code.fis-gmbh.de:2222/fis-gruppe/intern/ai-solutions/ai-apps/ai-services/mpm-master_data_search.git && cd mpm-master_data_search
 uv venv && uv pip install -r requirements.txt
 cp .env.example .env              # fill in OPENAI_API_KEY, SAP_USER, SAP_PASSWORD (and deployment names if they differ)
-.venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials, ~300k tokens, a few minutes)
+.venv/bin/python -m backend.indexer   # build data/chroma once (~14k materials + ~1.9k partners, a few minutes)
 .venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open http://127.0.0.1:8000.
 
-The indexer is resumable: it stores a content hash per material and only embeds new or changed materials, so an
-interrupted run can simply be started again. `--rebuild` deletes the DB and embeds everything (needed after
-changing the embedding model or `MDSA_EMBEDDING_DIMENSIONS`). With a new extract in `input/` (same file naming
-`*_<TABLE>.txt`, the newest file per table wins), run the indexer again.
+The indexer is resumable: it stores a content hash per object and only embeds new or changed ones, so an
+interrupted run can simply be started again. `python -m backend.indexer partner` (or `material`) indexes one object
+only; `--rebuild` deletes the collection(s) and embeds everything (needed after changing the embedding model or
+`MDSA_EMBEDDING_DIMENSIONS`). With a new extract in `input/MAT/` or `input/GPA/` (same file naming `*_<TABLE>.txt`,
+the newest file per table wins), run the indexer again. Folders: `MDSA_MATERIAL_INPUT_DIR`, `MDSA_PARTNER_INPUT_DIR`
+(material files directly in `input/`, as in older setups, are still found).
+
+After indexing, the indexer measures the recall of the vector search: for 50 short queries (the first words of random
+objects) it compares the 100 nearest neighbours returned by Chroma's approximate HNSW search with the exact ones
+(brute force) and warns below 95 %. `python -m backend.indexer --check` only runs this measurement.
+
+The HNSW graph is built with M = 32, ef_construction = 200, ef_search = 400 (`MDSA_HNSW_M`,
+`MDSA_HNSW_CONSTRUCTION_EF`, `MDSA_HNSW_SEARCH_EF`; Chroma's defaults 16 / 100 / 100 reached only ~90 % recall).
+When these settings differ from the ones a collection was built with, the indexer builds the graph again from the
+stored embeddings (no embedding calls, seconds for 15k objects); `--graph` forces this, e.g. after many incremental
+runs. A running server picks up the new collection automatically.
 
 Without `OPENAI_API_KEY` or without a built index the app still works with the fuzzy text search only and says so.
 
@@ -63,8 +85,9 @@ These secrets are not part of the chart and have to exist in the namespace:
 - `gitlab-registry-secret`: pull secret for the image registry
 
 The vector DB lives on a PVC (`/app/data`). An init container runs the indexer before every start of the
-app, so after a new image (e.g. with a new extract in `input/`) only new or changed materials are embedded.
-The first start embeds all materials and takes a few minutes.
+app, so after a new image (e.g. with a new extract in `input/`) only new or changed materials and business partners are
+embedded.
+The first start embeds everything and takes a few minutes.
 
 New versions are deployed by the GitLab pipeline. On every push to `main` it renders the chart, and if the
 app changed it builds and pushes the image and commits the new `image.tag` to `helm/values.yaml`
@@ -109,7 +132,7 @@ EOF
 If the Service `kong/kong-proxy` is recreated, its ClusterIP changes and Traefik answers 502/504: apply the
 EndpointSlice again. This is temporary until the Ingress moves to the `kong` namespace in the keycloak repo.
 
-## Search
+## Material search
 
 One search document per material: short texts (D/E/F/N), long texts (basic data, purchase order, sales, internal
 note), class names, readable feature values and the BOM context: the names of the direct components
@@ -122,11 +145,35 @@ for the fuzzy text search, otherwise every assembly would match the words of its
 | **Exakt** (always) | material number (with or without leading zeros), EAN of MARA/MARM, vendor part number (EINA-IDNLF), old material number – ranked first |
 | **Unscharf** | probabilistic retrieval with BM25 over all texts and codes. Every query word is expanded to vocabulary terms: exact, prefix (*Verschr* → *Verschraubung*, search-as-you-type), compound part (*mutter* → *Gegenmutter*) and typo (rapidfuzz ≥ 80: *mesing* → *messing*). Umlauts are folded (*Duebel* = *Dübel*), codes are split (*6x45* = *6 x 45*), and documents covering more query words are strongly preferred. Offers *Meinten Sie …* for corrected words. |
 | **Semantisch** | `text-embedding-3-large` (1536 dimensions) in Chroma, cosine similarity – finds synonyms and descriptions (*Schraubenzieher* → *Schraubendreher*, *Befestigung für Porenbeton* → *Gasbetondübel*) |
-| **Hybrid** (default) | Reciprocal Rank Fusion (k = 60) of the fuzzy and the semantic ranking |
+| **Hybrid** (default) | candidates of both retrievers, each scored by both: relevance = 50 % fuzzy score + 50 % calibrated similarity (cosine 0.25 → 0 %, 0.75 and above → 100 %; `MDSA_HYBRID_SEMANTIC_WEIGHT`, `MDSA_SEMANTIC_FULL_SIMILARITY`). Fuzzy hits that the approximate vector search (HNSW) missed get their exact similarity from the stored embeddings. Without any fuzzy hit only the similarity counts |
 | **KI-Suche** | for requests in own words with requirements, e.g. *Veganes Waschmittel ohne Mikroplastik mit Inhaltsstoffen aus EU-Anbau*. 1) the LLM extracts the searched product, search keywords and the requirements; 2) the hybrid search retrieves 30 candidates with the keywords (completed by semantic hits of the whole request); 3) the LLM checks every candidate against each requirement **using only its master data** (texts, long texts, classes, features, units …, no general product knowledge): *belegt*, *nicht belegt* or *widerspricht*, with the evidence. Only *passend* / *teilweise* candidates are shown; an empty result is a valid answer. Two LLM calls per search (some seconds) |
 
 Every hit shows which retriever found it and with which score; the *?* button explains how the query words were
 expanded. Filters: material type, material group, vendor, include materials flagged for deletion.
+
+## Business partner search
+
+One search document per partner: name (organisation names 1-4, first and last name of a person, group names),
+search terms, partner type and roles (Kunde, Lieferant, Kontaktperson …), the addresses with country, e-mail and web
+addresses, customer / vendor number with account group, blocks – plus the context: the **contact persons** of an
+organisation with function and department (or, for a person, the organisations it is the contact of, BUR001), other
+relationships and, for vendors, the **materials supplied** from the purchasing info records EINA of the material
+extract (an evenly spread sample of the short texts) – so *Lieferant für Kabelverschraubungen* finds the vendors
+of cable glands. As for the BOM context, contact names and materials are not used for the fuzzy text search.
+
+| Mode | How |
+|---|---|
+| **Exakt** (always) | partner number (with or without leading zeros), customer / vendor number, external partner number, tax number (USt-ID), IBAN, identification number, e-mail, phone, fax, website; for a contact person also the business e-mail / phone of the relationship |
+| **Unscharf**, **Semantisch**, **Hybrid** | same engine as for materials (`backend/textsearch.py`), collection `partners` |
+| **KI-Suche** | e.g. *Lieferant für Akkuschrauber in Unterfranken mit E-Mail-Adresse*: the LLM extracts the searched partner, keywords and requirements; 30 hybrid candidates are checked against each requirement using only their master data (roles, addresses – a region may be derived from postcode and city –, communication, contacts, customer / vendor data, bank details, materials supplied) |
+
+Filters: partner type (Organisation / Person / Gruppe), role, country of the standard address, grouping (BU_GROUP),
+include partners flagged for deletion (archiving flag XDELE or LOEVM of customer / vendor).
+
+The object page shows general data and roles, the addresses with their communication data, the **relationship
+graph** (organisation → contact persons, other relationships; click opens the partner) with the contact data from
+G050/GRAC/GRA2/GRA3/GRA6, the **materials supplied** (click opens the material; conversely the vendor in the
+material's purchasing info records opens the partner), all tables of the extract unchanged and the search document.
 
 ## Bills of material
 
@@ -146,14 +193,54 @@ Cycles (a BOM containing the material itself, as FG126 in the extract) are detec
 Search hits show the badges *Stückliste* and *in n Stücklisten*. After adding or changing BOM files, run the indexer
 again – it only re-embeds the materials whose BOM context changed.
 
-## Duplicate check
+## Duplicate check for materials
 
-On the object page (section *Dubletten*): candidates from semantic neighbours of the material's own embedding,
+On the material object page (section *Dubletten*): candidates from semantic neighbours of the material's own embedding,
 fuzzy name similarity (rapidfuzz token set ratio), BM25 with the short text as query, and identical keys (EAN,
 vendor part number), fused with RRF. *KI-Bewertung* sends the reference material and the candidates (texts, units,
 weights, dimensions, EANs, vendors, classification) to `gpt-5.6-luna`, which classifies each candidate as
 *Dublette*, *Mögliche Dublette*, *Variante* (same family, different size/thread/colour …) or *Verschieden* with a
 reason.
+
+## Duplicate check for business partners
+
+On the partner object page (section *Dubletten*), candidates from:
+
+- semantic neighbours of the partner's own embedding, BM25 with name and city as query
+- fuzzy name similarity **without the legal form** (*Müller GmbH & Co.KG* = *Müller KG*, rapidfuzz token set ratio)
+- the **same address** (country, postcode, street and house number; *Str.* = *Straße*)
+- **shared keys**: tax number / VAT ID, IBAN, identification number, external partner number (strong), e-mail,
+  phone, fax, website of the own addresses (weaker: test data shares info@ addresses)
+- **customer ↔ vendor cross references** (KNA1-LIFNR / LFA1-KUNNR pointing to another partner: in S/4HANA one
+  partner should carry both roles); for persons the same name with the same birth date
+
+fused with RRF. The similarity shown is the name or semantic similarity, at least 95 % for a strong shared key and
+90 % for the same name at the same address; the same name in another city (branches) is lowered and flagged
+*anderer Ort*. Badges: shared keys, *anderer Partnertyp*, *steht in Beziehung* (e.g. own contact person).
+Only candidates with a similarity of at least `DUPLICATE_MIN_SCORE` (80 %) are shown; without one the section
+just says *Keine relevante Dublette gefunden*, a link shows all candidates.
+*KI-Bewertung* sends the reference partner and the candidates (names, roles, addresses, communication, customer /
+vendor data, tax numbers, bank accounts, relations, materials supplied) to the LLM, which classifies each candidate
+as *Dublette*, *Mögliche Dublette*, *Verwandt* (branch / site, company of the same group, contact person) or
+*Verschieden* with a reason; candidates rated *Verschieden* are hidden afterwards.
+
+### Duplicate overview
+
+*Dublettenübersicht* (button on the partner search page, `#dubletten`) lists all partners with probable duplicates.
+The heuristic check above runs for every partner (about 10 ms each, computed in the background at startup and
+cached; *Neu berechnen* recomputes, e.g. after the vector index was rebuilt). No LLM call is made here; the LLM
+assessment stays on the partner page, where a click on a partner in the overview lands in the *Dubletten* section.
+Each relevant candidate pair is counted once and gets the tier of its strongest evidence:
+
+1. *Gleiche Kennung*: shared identifier – tax number, IBAN, ID number, external partner number, birth date, or customer / vendor cross reference
+2. *Gleiche Adresse*: similar name (≥ 80 %) at the same address
+3. *Ähnlicher Name*: similar name only (often branches)
+4. *Nur semantisch*: similar embeddings only (many false hits, off by default)
+
+Pairs with a similar name are merged into groups (A–B and B–C → A, B, C). Pairs that share a key but have different
+names (usually copied test bank details or tax numbers) are not merged and stay separate, flagged *abweichender Name
+– Kennung prüfen*; *Nur gleicher Name* hides them. Filters: tier (default up to 3), deleted partners, text. The
+shown groups can be exported as CSV (one line per partner).
 
 ## Send to SAP
 
@@ -173,6 +260,118 @@ default `fis127 … /s4k_100`, the source system of the extract) – same SOAP m
 - the dialog shows the XML (read-only, copy / download), asks for confirmation (with a warning for materials flagged
   for deletion) and shows HTTP status and SAP response
 
+*An SAP senden* on the **business partner** object page sends the partner the same way (same endpoint, message
+format and dialog, `GET /api/partners/{partner}/xml`, then `POST /api/sap/post`):
+
+- one `item` per GPA table in extract order (`TObj` = table name, e.g. `G000`, `G100`, `G0BK`, `GTAX`, `GADC`,
+  `GAD2`, `GAD6`, `G021`, `G050`, `GKA1`, `GKVP`, `GLA1`, `GLT3`, …), header line with the SAP field names, one line
+  per row, all fields filled in at least one row of the table, values unchanged
+- every line starts with the key field `PARTNER` (`SAP_PARTNER_KEY_FIELD`) holding the partner number as in the
+  extract (10 digits)
+- `XDELE` is only sent in `G000` (archiving flag of the partner); in the other tables it marks deleted extract rows,
+  which are not loaded and not sent
+- `IfVariant` is `SAP_PARTNER_VARIANT` (default `BRUNO_GPA`; materials keep `SAP_VARIANT`, default `BRUNO`)
+
+## Deletion check
+
+*Löschprüfung* on the partner object page checks – on demand only, read only – whether open documents in SAP still
+reference the partner (preparation for marking partners as deleted). Live via the standard OData APIs
+(`SAP_ODATA_URL`, client `SAP_CLIENT`), `POST /api/partners/{partner}/deletion-check`. All checks run in parallel.
+
+**Customer role** – the customer in **any partner function** (sold-to, ship-to, bill-to, payer, … – header and item
+partners):
+
+| Area | API | Blocking |
+|---|---|---|
+| Sales orders | `API_SALES_ORDER_SRV` | overall processing status not *C* (completed) – also delivered but not yet billed orders, and orders without delivery-relevant items; fully rejected orders only as a warning |
+| Quotations | `API_SALES_QUOTATION_SRV` | not completed and still valid; expired quotations are only a warning |
+| Billing documents | `API_BILLING_DOCUMENT_SRV` | not cancelled, sold-to or payer, not transferred to accounting (transfer status not *C* / *D* / *E*) |
+| Open items customer (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the customer account (account type *D*), all company codes, incl. special G/L (down payments); noted items (category *S*, e.g. down payment requests) only as a warning; the summary shows the balance of the open items |
+| Outbound deliveries | `API_OUTBOUND_DELIVERY_SRV;v=0002` | goods issue not (fully) posted (goods movement status *A* / *B*), sold-to or ship-to |
+| Contracts | `API_SALES_CONTRACT_SRV` | overall processing status not *C*; contracts whose validity has ended only as a warning |
+| Scheduling agreements | `API_SALES_SCHEDULING_AGREEMENT` | overall processing status not *C*; ended validity only as a warning |
+| Returns | `API_CUSTOMER_RETURN_SRV` | overall processing status not *C* |
+| Credit memo requests | `API_CREDIT_MEMO_REQUEST_SRV` | overall processing status not *C* |
+
+For all sales documents (orders, quotations, contracts, scheduling agreements, returns, credit memo requests), fully
+rejected ones (`OverallSDDocumentRejectionSts` = *C*) are only a warning: they are effectively closed even when the
+processing status is not *C*. Logon language `SAP_LOGON_LANGUAGE` makes document types come in German (*TA* instead
+of *OR*). The SAP user needs read authorization for each API (`/IWFND/MAINT_SERVICE`: service active, role with
+`S_SERVICE` and display authorization for the documents).
+
+**Supplier role** – the supplier as supplier (*LF*), invoicing party (*RS*), goods supplier (*WL*), ordering address
+(*BA*) or bidder (*BI*), from the header fields or the purchasing partner table, wherever the API has them:
+
+| Area | API | Blocking |
+|---|---|---|
+| Open items supplier (FI) | `API_OPLACCTGDOCITEMCUBE_SRV` | not cleared items of the supplier account (account type *K*), as for customers |
+| Supplier invoices | `API_SUPPLIERINVOICE_PROCESS_SRV` | not posted (parked / held, status not *5*), invoicing party; posted invoices are in the FI open items |
+| Purchase orders | `API_PURCHASEORDER_PROCESS_SRV` | not deleted, with items not deleted and not completely delivered; value of the open items = order quantity × net price. The final invoice flag is not maintained on fis127 (no item has it), so "not finally invoiced" is no criterion |
+| Scheduling agreements (purchasing) | `API_SCHED_AGRMT_PROCESS_SRV` | not deleted; validity ended only as a warning |
+| Contracts (purchasing) | `API_PURCHASECONTRACT_PROCESS_SRV;v=0002` | not deleted; validity ended only as a warning |
+| Inbound deliveries | `API_INBOUND_DELIVERY_SRV;v=0002` | goods receipt not (fully) posted (goods movement status *A* / *B*) |
+| Purchase requisitions | `API_PURCHASEREQ_PROCESS_SRV` | warning only: not deleted, not closed, not yet converted (processing status *N*), supplier as fixed or desired source |
+| Requests for quotation | `API_RFQ_PROCESS_SRV` | warning only: draft or published (lifecycle status *01* / *02*), supplier as bidder – also covers supplier quotations, which always answer an RFQ (`API_QTN_PROCESS_SRV` is therefore not needed) |
+| Purchasing info records | extract (`EINA`) | warning only: not deleted info records from the material extract (master data, not live) – `API_INFORECORD_PROCESS_SRV` is not needed |
+
+The purchasing partner table (EKPA) holds the partners of all purchasing documents, so the partner entities of the
+scheduling agreement and contract APIs also return purchase order numbers; only numbers found as a header count.
+
+Filters use the 10-digit SAP number (`Partner.kunnr_sap` / `lifnr_sap`); the services accept it with or without
+leading zeros but return numbers **without** them, so results are compared via `same_number`.
+
+Areas whose API is not available (HTTP 403/404) are reported as **nicht geprüft**, never as passed – after the
+activation of all services above there are none left; the lists `NOT_AVAILABLE_CUSTOMER` / `NOT_AVAILABLE_VENDOR` in
+`backend/partner/deletion_check.py` stay for future areas. The result is *Löschen nicht möglich* (open documents),
+*unvollständig* (no open documents in the checked areas, but areas not checked or failed) or *keine offenen Belege*;
+warnings never block. The dialog shows business texts only – no service names or SAP error messages; the
+response still carries `service` (and `error` for failed areas), and failures are logged with service and SAP message.
+
+## Golden record (merge duplicates)
+
+*Zusammenführen* on a group of the duplicate overview opens a wizard (`#/golden-record/<p1>,<p2>,...`,
+`backend/partner/merge.py`) for one group at a time:
+
+*Golden Record* on the partner page (after the AI assessment) opens it with the partner and the candidates rated
+(possible) duplicate.
+
+1. **Keep** – the groups of the overview are heuristic, so the LLM first judges every member against the suggested
+   partner (`/api/partners/{partner}/duplicates/assess`); only *Dublette* stays included, *Mögliche Dublette*,
+   *Verwandt* and *Verschieden* are excluded (the user can include them again; after changing the kept partner the
+   assessment can be repeated against it). Suggested: not deleted / blocked, customer and vendor, most info records, contacts, sales areas and
+   purchasing organisations. Partners that are no duplicate can be excluded. Sales areas (GKVP) or purchasing
+   organisations (GLT3) of the others that the kept partner lacks are shown as a hint (they can be created with FIS/mpm).
+2. **Treat the others** – deletion check per partner (live, cached for `MDSA_MERGE_CHECK_MAX_AGE`). Options:
+   *Löschvormerkung* only without open documents (validated again on the server before sending), *zentrale Sperre*,
+   *Kundensperre*, *Lieferantensperre*.
+3. **Best values** – attribute groups that differ (name, search terms, title, language, external number, legal form /
+   founding date or birth date, standard address as a whole) and the communication, bank, tax and id entries the kept
+   partner lacks, and their relationships (contact persons, ...); the LLM picks the best value / decides what to take over (without `OPENAI_API_KEY`: the kept
+   partner's values, missing ones from the others). A missing customer / vendor role is taken over from another partner.
+4. **Review and send** – changes, warnings and the DXTO message; *An FIS/mpm senden* sends it to the staging table of FIS/mpm, where it is
+   approved and posted. Every send is logged in SQLite (`MDSA_MERGE_DB`, default `data/merges.sqlite`) with the
+   extract timestamp; the overview marks the group as sent until a new extract arrives.
+
+Import rules of FIS/mpm that the message follows:
+
+| What | Rows sent |
+|---|---|
+| Changed data of the kept partner | complete rows (all columns; empty clears the field, `/` would leave it unchanged): G000, GADC with the existing `ADDRNUMBER`, GTAX with the existing `TAXTYPE` |
+| New communication entries | GAD2 / GAD3 / GAD6 / GADU on the kept standard address, `CONSNUMBER` 900, 901, … |
+| New bank account / id / tax | G0BK with `BKVID` 9000, 9001, …; G0ID (`TYPE` + `IDNUMBER`); GTAX (`TAXTYPE`) |
+| New standard address (kept partner without one) | GADC + G021 with `ADDRNUMBER` 9000000000 |
+| Customer / vendor role of another partner | G100 rows FLCU00/FLCU01 or FLVN00/FLVN01, GKA1 / GLA1 copied with empty `KUNNR` / `LIFNR` (FIS/mpm numbers it) and without deletion / block flags |
+| Deletion flag | G000 `XDELE` (archiving flag), GKA1 / GLA1 `LOEVM` |
+| Central block | G000 `XBLCK` |
+| Customer block | GKA1 `SPERR` = X, `AUFSD` / `LIFSD` / `FAKSD` / `CASSD` = `MDSA_MERGE_*_BLOCK` (default 01, 01, 01, not set) |
+| Vendor block | GLA1 `SPERR`, `SPERM` = X |
+
+| Relationship moved to the kept partner | G050 + GRAC / GRA2 / GRA3 / GRA6 with `LFDNR` 900, …; the address number is the kept partner's standard address if it was the other partner's own (organisation side), otherwise unchanged (it is the organisation's address); the old relationship is sent with `XDELE` = X |
+
+Temporary keys start with 9 followed by zeros of the field length; FIS/mpm assigns the real numbers when posting.
+`XDELE` is only part of a table's header when a row of that table is deleted (in G000 it is the archiving flag). The
+`*FS` columns (`ADDRFS`, `PARTNERFS2`, `KTOFS`) are meant for completely new partners and stay empty.
+
 ## OpenAI endpoint
 
 As in the research agent, the default is the Azure OpenAI resource `https://fisg-openai-valuestream-aoi.openai.azure.com/`
@@ -184,7 +383,7 @@ to use api.openai.com instead.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| GET | `/api/config` | – | counts, models, whether the key is configured, filter values |
+| GET | `/api/config` | – | counts, models, whether the key is configured, filter values (partner: under `partner`) |
 | POST | `/api/search` | `{query, mode: hybrid\|semantic\|lexical, mtart[], matkl[], vendor[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `text_html`; `did_you_mean`, `expansions` |
 | GET | `/api/suggest?q=` | – | up to 8 suggestions (fuzzy text search only, no embedding call) |
 | GET | `/api/materials/{matnr}` | – | all data of a material |
@@ -193,6 +392,22 @@ to use api.openai.com instead.
 | POST | `/api/materials/{matnr}/duplicates/assess` | `{candidates: [matnr]}` (optional) | LLM verdicts |
 | GET | `/api/materials/{matnr}/xml` | – | SOAP message of the material, tables, endpoint |
 | POST | `/api/sap/post` | `{xml}` | `{ok, status_code, reason, fault, body}` |
+| POST | `/api/partners/search` | `{query, mode: hybrid\|semantic\|lexical\|ai, type[], role[], country[], group[], include_deleted, limit}` | hits with `relevance`, `exact`, `lexical`, `semantic`, `name_html`, `address_html` |
+| GET | `/api/partners/suggest?q=` | – | up to 8 suggestions |
+| GET | `/api/partners/tables` | – | GPA table descriptions (objects.md) |
+| GET | `/api/partners/duplicates?max_tier=3&include_deleted=false&refresh=false` | – | duplicate groups over all partners (heuristic), pair counts per tier |
+| POST | `/api/partners/merge/proposal` | `{partners: [partner]}` | group with suggested `keep`, reasons, sales areas / purchasing orgs, earlier merges |
+| POST | `/api/partners/merge/deletion-check/{partner}?refresh=false` | – | deletion check (cached for the validation before sending) |
+| POST | `/api/partners/merge/advice` | `{partners, keep}` | differing attribute `groups` and list `items` with the LLM's choice |
+| POST | `/api/partners/merge/preview` | `{partners, keep, choices: {group: partner}, take: [item key], actions: {partner: [delete\|central_block\|customer_block\|vendor_block]}}` | `changes`, `warnings`, `tables`, `xml` |
+| POST | `/api/partners/merge/send` | as preview | validates, sends to DXTO, logs: preview + `result`, `log_id` |
+| GET | `/api/partners/merge/log?partner=` | – | logged merges, newest first |
+| GET | `/api/partners/merge/log/{id}` | – | one log entry with message and SAP response |
+| GET | `/api/partners/{partner}` | – | all data of a partner: addresses, relations, materials, all extract tables |
+| GET | `/api/partners/{partner}/xml` | – | SOAP message of the partner, tables, endpoint, variant |
+| POST | `/api/partners/{partner}/deletion-check` | – | open documents blocking the deletion: `verdict` (blocked / incomplete / ok), `checks` with documents |
+| GET | `/api/partners/{partner}/duplicates` | – | duplicate candidates with signals |
+| POST | `/api/partners/{partner}/duplicates/assess` | `{candidates: [partner]}` (optional) | LLM verdicts |
 
 ## Notes
 

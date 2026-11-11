@@ -8,10 +8,11 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 from rapidfuzz import fuzz, process
 
-from . import vectordb
-from .config import DUPLICATE_CANDIDATES, MODEL, REASONING_EFFORT, RRF_K
+from .. import llm, vectordb
+from ..config import DUPLICATE_CANDIDATES, MATERIAL_COLLECTION, MODEL, RRF_K
+from ..textsearch import normalize
 from .data import Material, load_materials
-from .search import index, normalize
+from .search import index
 
 
 @lru_cache(maxsize=1)
@@ -22,14 +23,7 @@ def short_texts() -> tuple[list[str], list[str]]:
 
 
 def semantic_neighbours(m: Material, limit: int) -> list[tuple[str, float]]:
-    col = vectordb.collection()
-    if not col.count():
-        return []
-    own = col.get(ids=[m.id], include=["embeddings"])
-    if not len(own["ids"]):
-        return []
-    result = col.query(query_embeddings=[own["embeddings"][0]], n_results=limit + 1, include=["distances"])
-    return [(i, 1 - d) for i, d in zip(result["ids"][0], result["distances"][0]) if i != m.id]
+    return vectordb.neighbours(MATERIAL_COLLECTION, m.id, limit)
 
 
 def candidates(matnr: str, limit: int = DUPLICATE_CANDIDATES) -> dict:
@@ -78,7 +72,7 @@ def candidates(matnr: str, limit: int = DUPLICATE_CANDIDATES) -> dict:
                        "same_unit": c.mara.get("MEINS") == m.mara.get("MEINS"),
                        "score": round(score * 100)})
     result.sort(key=lambda c: -c["score"])
-    return {"material": m.summary(), "candidates": result, "semantic_available": vectordb.indexed_count() > 0}
+    return {"material": m.summary(), "candidates": result, "semantic_available": vectordb.indexed_count(MATERIAL_COLLECTION) > 0}
 
 
 # --- LLM assessment -------------------------------------------------------
@@ -146,14 +140,6 @@ def assess(matnr: str, candidate_ids: Optional[list[str]] = None) -> dict:
     user = ("Reference material:\n" + json.dumps(compact(materials[matnr]), ensure_ascii=False)
             + "\n\nCandidates:\n" + "\n".join(json.dumps(compact(materials[c]), ensure_ascii=False)
                                               for c in candidate_ids))
-    response = vectordb.client().responses.parse(
-        model=MODEL,
-        reasoning={"effort": REASONING_EFFORT},
-        input=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
-        text_format=DuplicateAssessment,
-    )
-    result = response.output_parsed
-    if result is None:
-        raise RuntimeError(f"Das LLM hat kein strukturiertes Ergebnis geliefert: {response.output_text!r}")
+    result = llm.parse(SYSTEM_PROMPT, user, DuplicateAssessment)
     verdicts = [v for v in result.verdicts if v.matnr in candidate_ids]
     return {"summary": result.summary, "verdicts": [v.model_dump() for v in verdicts], "model": MODEL}

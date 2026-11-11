@@ -89,7 +89,111 @@ sap.ui.define([
           Tabellen, bei Stücklistenköpfen inkl. STKO/STPO), mit der Materialnummer als <code>MATNR</code> an SAP – das
           vorhandene Material wird geändert. Vorher wird die XML-Nachricht angezeigt und eine Bestätigung abgefragt.</li>
           <li><strong>Suchdokument:</strong> der Text, der für die semantische Suche in die Vektordatenbank eingebettet wurde.</li>
+          <li><strong>Lieferant</strong> in den Einkaufsinfosätzen: öffnet den Geschäftspartner.</li>
         </ul>`
+    },
+    {
+      title: "Geschäftspartnersuche",
+      html: `<p>Mit dem Schalter <strong>Material | Geschäftspartner</strong> über dem Suchfeld wechseln Sie zwischen den
+        beiden Stammdatenobjekten; jede Suche behält ihre letzte Anfrage. Die Geschäftspartnersuche durchsucht den
+        GPA-Extrakt (Allgemeine Daten, Rollen, Adressen und Kommunikation, Beziehungen / Ansprechpartner, Kunden- und
+        Lieferantendaten, Bankverbindungen, Steuer- und Identifikationsnummern) mit denselben Suchmodi:</p>
+        <ul>
+          <li><strong>Exakt:</strong> Partner-, Kunden-, Lieferantennummer, externe Partnernummer, Steuernummer / USt-ID,
+          IBAN, Identifikationsnummer, E-Mail, Telefon, Fax, Webseite.</li>
+          <li><strong>Unscharf:</strong> Namen, Suchbegriffe, Adressen, Kommunikationsdaten und Nummern mit Tippfehler-Toleranz.</li>
+          <li><strong>Semantisch:</strong> zusätzlich die Namen der Ansprechpartner (bzw. die Unternehmen einer Person) und
+          bei Lieferanten die <strong>gelieferten Materialien</strong> aus den Einkaufsinfosätzen – <em>Lieferant für
+          Kabelverschraubungen</em> findet Lieferanten, auch wenn das Wort nicht im Namen steht.</li>
+          <li><strong>KI-Suche:</strong> z. B. <em>Lieferant für Akkuschrauber in Unterfranken mit E-Mail-Adresse</em> – das
+          LLM prüft Rolle, Region (aus PLZ und Ort), Kommunikation usw. ausschließlich anhand der Stammdaten.</li>
+          <li><strong>Filter:</strong> Partnertyp (Organisation, Person, Gruppe), Rolle (Kunde, Lieferant, Kontaktperson …),
+          Land der Standardadresse, Gruppierung.</li>
+        </ul>
+        <p>Die Detailseite zeigt Adressen mit Kommunikationsdaten, den Beziehungsgraphen mit den Ansprechpartnern
+        (Klick öffnet den Partner), die gelieferten Materialien (Klick öffnet das Material) und alle Tabellen des
+        Extrakts unverändert.</p>
+        <p><strong>An SAP senden</strong> sendet den Geschäftspartner wie ein Material unverändert an SAP: je Tabelle
+        (<code>G000</code>, <code>G100</code>, <code>GADC</code>, …) eine Kopfzeile mit den SAP-Feldnamen und eine Zeile je
+        Datensatz, jede Zeile mit der Partnernummer als <code>PARTNER</code>. Vorher wird die XML-Nachricht angezeigt und
+        eine Bestätigung abgefragt.</p>
+        <p><strong>Löschprüfung</strong> prüft auf Knopfdruck (nur lesend, live aus SAP), ob noch offene Belege den
+        Partner verwenden – in <em>jeder</em> Partnerrolle (Auftraggeber, Warenempfänger, Rechnungsempfänger, Regulierer):
+        nicht erledigte Kundenaufträge, gültige Angebote (abgelaufene nur als Hinweis; vollständig abgelehnte Belege generell nur als Hinweis), Fakturen, die noch nicht an die
+        Buchhaltung übergeben sind, Lieferungen ohne Warenausgang, nicht erledigte Kontrakte und Lieferpläne (abgelaufene
+        nur als Hinweis), Retouren und Gutschriftsanforderungen, dazu offene Posten des Debitoren- bzw. Kreditorenkontos
+        (FI, alle Buchungskreise, mit Saldo; Merkposten wie Anzahlungsanforderungen nur als Hinweis).</p>
+        <p>Bei Lieferanten (als Lieferant, Rechnungssteller, Warenlieferant, Bestelladresse oder Bieter): nicht gebuchte
+        (vorerfasste) Eingangsrechnungen, Bestellungen mit nicht vollständig gelieferten Positionen, nicht gelöschte
+        Lieferpläne und Kontrakte des Einkaufs (abgelaufene nur als Hinweis) und Anlieferungen ohne Wareneingang. Nur als
+        Hinweis: offene Bestellanforderungen, offene Anfragen und die Einkaufsinfosätze laut Extrakt.</p>
+        <p>Bereiche, deren Schnittstelle nicht erreichbar ist, erscheinen als <em>nicht geprüft</em> – das Ergebnis ist
+        dann „unvollständig“, nie „in Ordnung“. Hinweise verhindern das Löschen nicht.</p>`
+    },
+    {
+      title: "Dublettenprüfung für Geschäftspartner",
+      html: `<p>Kandidaten aus semantischer Nähe, Namensähnlichkeit <strong>ohne Rechtsform</strong> (<em>GmbH &amp; Co.KG</em>
+        = <em>KG</em>), <strong>gleicher Adresse</strong> und <strong>gemeinsamen Schlüsseln</strong>: Steuernummer / USt-ID,
+        IBAN, Identifikationsnummer (stark), E-Mail, Telefon, Fax, Webseite (schwächer). Verweist der Kunde auf die
+        Lieferantennummer eines anderen Partners (oder umgekehrt), ist das ein starkes Indiz – in S/4HANA sollte ein
+        Partner beide Rollen tragen. Gleicher Name an einem <em>anderen Ort</em> ist meist eine Niederlassung und wird
+        niedriger bewertet.</p>
+        <p>Angezeigt werden nur <strong>relevante</strong> Kandidaten (Ähnlichkeit ab 80 %); gibt es keine, steht dort
+        „Keine relevante Dublette gefunden“. Über den Link darunter lassen sich alle Kandidaten einblenden.</p>
+        <p><em>KI-Bewertung</em> lässt das LLM jeden angezeigten Kandidaten als <strong>Dublette</strong>, <strong>mögliche
+        Dublette</strong>, <strong>verwandt</strong> (Niederlassung, Konzerngesellschaft, Ansprechpartner) oder
+        <strong>verschieden</strong> einstufen – mit Begründung. Als verschieden bewertete Kandidaten werden danach
+        ausgeblendet.</p>`
+    },
+    {
+      title: "Dublettenübersicht für Geschäftspartner",
+      html: `<p>Die <em>Dublettenübersicht</em> (Schaltfläche auf der Geschäftspartnersuche) führt die Dublettenprüfung für
+        <strong>alle</strong> Partner aus – ohne KI – und zeigt die Partner, die wahrscheinlich mehrfach angelegt sind.
+        Jedes Kandidatenpaar erhält die Stufe seines stärksten Hinweises:</p>
+        <ul>
+          <li><strong>Gleiche Kennung:</strong> beide Partner haben eine Nummer gemeinsam, die eindeutig zu einem
+          Unternehmen oder einer Person gehört – gleiche Steuernummer, IBAN, Identifikations- oder externe Partnernummer,
+          gleiches Geburtsdatum oder Kunde und Lieferant verweisen aufeinander</li>
+          <li><strong>Gleiche Adresse:</strong> ähnlicher Name an derselben Adresse</li>
+          <li><strong>Ähnlicher Name:</strong> nur der Name ist ähnlich (häufig auch Niederlassungen)</li>
+          <li><strong>Nur semantisch:</strong> nur über die Embeddings ähnlich – viele Fehltreffer, daher standardmäßig aus</li>
+        </ul>
+        <p>Partner mit ähnlichem Namen werden zu <strong>Gruppen</strong> zusammengefasst (A ähnelt B, B ähnelt C → eine
+        Gruppe A, B, C). Paare mit gleicher Kennung, aber <em>abweichendem Namen</em> sind meist Datenfehler (z. B.
+        kopierte Bankdaten) und erscheinen einzeln mit dem Hinweis <em>Kennung prüfen</em>.</p>
+        <p>Ein Klick auf eine Partnernummer öffnet die Detailseite im Abschnitt <em>Dubletten</em>; dort lässt sich der
+        Partner einzeln per <em>KI-Bewertung</em> prüfen. <em>CSV-Export</em> speichert die angezeigten Gruppen (eine Zeile je
+        Partner), <em>Neu berechnen</em> ermittelt die Kandidaten neu.</p>`
+    },
+    {
+      title: "Golden Record – Dubletten zusammenführen",
+      html: `<p><em>Zusammenführen</em> in der Dublettenübersicht oder <em>Golden Record</em> nach der KI-Bewertung auf der
+        Detailseite (Partner mit den als (mögliche) Dublette bewerteten Kandidaten) öffnet für eine Gruppe einen Assistenten in vier Schritten:</p>
+        <ol>
+          <li><strong>Partner behalten:</strong> die Gruppen der Übersicht enthalten nur <em>mögliche</em> Dubletten. Die
+          KI bewertet daher jeden Partner gegenüber dem vorgeschlagenen; nur echte <em>Dubletten</em> bleiben angehakt,
+          <em>mögliche Dubletten</em>, verwandte und verschiedene Partner werden abgewählt (bei Bedarf selbst anhaken).
+          Vorschlag ist der Partner ohne Löschvormerkung/Sperre, der Kunde und
+          Lieferant ist und die meisten Infosätze, Ansprechpartner und Organisationen hat. Partner, die keine Dublette
+          sind, lassen sich abwählen. Fehlen dem behaltenen Partner Vertriebsbereiche oder Einkaufsorganisationen der
+          anderen, erscheint ein Hinweis – sie können mit FIS/mpm angelegt werden.</li>
+          <li><strong>Dubletten behandeln:</strong> für jeden anderen Partner läuft die Löschprüfung live in SAP.
+          Ohne offene Belege ist die <em>Löschvormerkung</em> vorbelegt (Archivierungsvormerkung des Partners und
+          Löschvormerkung von Kunde/Lieferant); mit offenen Belegen ist sie gesperrt und es bleiben die
+          <em>zentrale Sperre</em>, die <em>Kundensperre</em> (Buchungs-, Auftrags-, Liefer-, Fakturasperre) und die
+          <em>Lieferantensperre</em> (Buchungs- und Einkaufssperre).</li>
+          <li><strong>Beste Werte:</strong> die KI wählt je abweichendem Datum (Name, Suchbegriffe, Rechtsform, Sprache,
+          Standardadresse, …) den besten Wert und schlägt Telefon, Fax, E-Mail, Webseite, Bankverbindungen, Steuer- und
+          Identifikationsnummern der anderen zur Übernahme vor. Ist der behaltene Partner kein Kunde oder Lieferant, wird
+          die Rolle eines anderen übernommen; die neue Nummer vergibt FIS/mpm. Alles lässt sich ändern.</li>
+          <li><strong>Prüfen und senden:</strong> zeigt alle Änderungen und die Importnachricht. <em>An FIS/mpm senden</em>
+          stellt sie in die Staging-Tabelle von FIS/mpm; Prüfung, Freigabe und Buchung erfolgen dort. Jede Sendung wird
+          protokolliert (<em>Protokoll</em>); die Gruppe ist in der Übersicht als gesendet markiert, bis der nächste
+          Extrakt die Partner nicht mehr als Dubletten enthält.</li>
+        </ol>
+        <p><strong>Beziehungen</strong> (z. B. Ansprechpartner) der anderen Partner erscheinen in Schritt 3 ebenfalls zur
+        Übernahme: sie werden als neue Beziehung beim behaltenen Partner angelegt, die alte wird zur Löschung markiert.
+        Nicht übernommene Beziehungen nennt der letzte Schritt.</p>`
     }
   ];
 

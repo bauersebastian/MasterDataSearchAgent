@@ -1,12 +1,13 @@
 """Load the SAP material master extract from the input folder and build one search document per material."""
-import csv
 import hashlib
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-from .config import EMBED_LANGUAGES, FALLBACK_LANGUAGES, INPUT_DIR, LANGUAGE
+from ..config import EMBED_LANGUAGES, FALLBACK_LANGUAGES, LANGUAGE, MATERIAL_INPUT_DIR
+from ..tables import read_table as _read_table
+from ..tables import strip_zeros
 
 TABLES = ["MARA", "MAKT", "MARM", "MECL", "MEME", "MTXT", "EINA"]
 BOM_TABLES = ["STKO", "STPO"]   # bill of material header / items, keyed by the header material (optional files)
@@ -17,27 +18,11 @@ TEXT_IDS = {"GRUN": "Grunddatentext", "BEST": "Bestelltext", "IVER": "Interner V
 
 def strip_matnr(matnr: str) -> str:
     """SAP internal (zero padded) material number -> display form."""
-    return (matnr.lstrip("0") or "0") if matnr.isdigit() else matnr
-
-
-def pad_matnr(matnr: str) -> str:
-    matnr = matnr.strip()
-    return matnr.zfill(18) if matnr.isdigit() else matnr.upper()
-
-
-def table_file(table: str):
-    files = sorted(INPUT_DIR.glob(f"*_{table}.txt"))
-    if not files:
-        raise FileNotFoundError(f"Keine Datei *_{table}.txt in {INPUT_DIR}")
-    return files[-1]   # newest extract
+    return strip_zeros(matnr)
 
 
 def read_table(table: str, optional: bool = False) -> list[dict]:
-    if optional and not any(INPUT_DIR.glob(f"*_{table}.txt")):
-        return []
-    with open(table_file(table), encoding="utf-8", newline="") as fh:
-        rows = csv.DictReader(fh, delimiter=";", quoting=csv.QUOTE_NONE)
-        return [{k: (v or "").strip() for k, v in row.items() if k} for row in rows]
+    return _read_table(MATERIAL_INPUT_DIR, table, optional)
 
 
 def number(value: str) -> str:
@@ -146,6 +131,15 @@ class Material:
             self.document(bom=False), *self.texts.values(), self.id, *self.eans, *self.vendor_parts,
             self.mara.get("BISMT", ""), self.mara.get("MATKL", ""), self.mara.get("MTART", ""),
         ])
+
+    def search_keys(self) -> list[tuple[str, list[str]]]:
+        """Exact keys: (label, values)."""
+        return [("Materialnummer", [self.id, self.matnr]), ("EAN", self.eans),
+                ("Lieferanten-Teilenr.", self.vendor_parts), ("Alte Materialnr.", [self.mara.get("BISMT", "")])]
+
+    def index_metadata(self) -> dict:
+        """Metadata stored with the embedding in the vector DB."""
+        return {"mtart": self.mara.get("MTART", ""), "matkl": self.mara.get("MATKL", "")}
 
     def content_hash(self) -> str:
         return hashlib.sha1(self.document().encode("utf-8")).hexdigest()[:16]

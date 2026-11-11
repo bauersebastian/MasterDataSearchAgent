@@ -1,4 +1,4 @@
-<mvc:View controllerName="fis.mdsa.controller.Search"
+<mvc:View controllerName="fis.mdsa.controller.material.Search"
   xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:f="sap.f" xmlns:core="sap.ui.core" height="100%">
   <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" headerPinned="true" fitContent="false">
     <f:title>
@@ -7,7 +7,7 @@
           <HBox alignItems="Center">
             <Image src="https://www.fis-gmbh.de/wp-content/uploads/de/img-logos/logos-fis/logo_fis_2022_blau.svg"
               alt="FIS" height="2rem" class="sapUiSmallMarginEnd"/>
-            <Title text="{i18n>appTitle}" wrapping="true"/>
+            <Title text="{i18n>materialTitle}" wrapping="true"/>
           </HBox>
         </f:heading>
         <f:snappedContent>
@@ -23,6 +23,15 @@
     <f:header>
       <f:DynamicPageHeader pinnable="false">
         <VBox class="mdsaSearchBox">
+          <FlexBox justifyContent="Center" class="sapUiSmallMarginBottom">
+            <SegmentedButton id="objectSwitch" selectedKey="material" selectionChange=".onObjectSwitch" width="22rem">
+              <items>
+                <SegmentedButtonItem key="material" text="Material" icon="sap-icon://product"/>
+                <SegmentedButtonItem key="partner" text="Geschäftspartner" icon="sap-icon://customer"
+                  enabled="{= !!${/config/partner/available} }"/>
+              </items>
+            </SegmentedButton>
+          </FlexBox>
           <SearchField id="searchField" value="{/query}" width="100%" enableSuggestions="true" maxLength="200"
             placeholder="Material suchen - Materialnummer, EAN, Lieferanten-Teilenr. oder in eigenen Worten beschreiben"
             search=".onSearch" suggest=".onSuggest" suggestionItems="{path: 'suggest>/items', templateShareable: false}">

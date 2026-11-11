@@ -1,0 +1,246 @@
+<mvc:View controllerName="fis.mdsa.controller.partner.Merge"
+  xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:f="sap.f" xmlns:core="sap.ui.core" xmlns:code="sap.ui.codeeditor"
+  height="100%">
+  <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" fitContent="true" busy="{m>/busy}" busyIndicatorDelay="0">
+    <f:title>
+      <f:DynamicPageTitle>
+        <f:breadcrumbs>
+          <Breadcrumbs currentLocationText="Golden Record">
+            <Link text="Dublettenübersicht" press=".onBack"/>
+          </Breadcrumbs>
+        </f:breadcrumbs>
+        <f:heading>
+          <HBox alignItems="Center">
+            <core:Icon src="sap-icon://combine" size="1.5rem" class="sapUiSmallMarginEnd"/>
+            <Title text="Golden Record – {= ${m>/partners}.length } Geschäftspartner zusammenführen" wrapping="true"/>
+          </HBox>
+        </f:heading>
+        <f:actions>
+          <Button text="Protokoll" icon="sap-icon://history" type="Transparent" press=".onShowLog"/>
+          <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+          <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
+        </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
+
+    <f:content>
+      <Wizard id="wizard" class="sapUiNoContentPadding" showNextButton="true" enableBranching="false">
+
+        <!-- 1: which partner is kept -->
+        <WizardStep id="stepKeep" title="Partner behalten" icon="sap-icon://favorite" validated="{= !!${m>/keepValid} }">
+          <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+            text="Wählen Sie unter „Behalten“ den Partner, der bestehen bleibt. Er übernimmt die besten Daten der anderen; alle anderen einbezogenen Partner erhalten eine Löschvormerkung bzw. Sperren. Das Kennzeichen „Vorschlag“ markiert den Partner mit den vollständigsten Daten, die Begründung steht in der Spalte „Gründe Vorschlag“. Ist ein Partner keine Dublette, entfernen Sie den Haken bei „Einbeziehen“."/>
+          <MessageStrip type="Warning" showIcon="true" class="sapUiSmallMarginBottom" visible="{= ${m>/log}.length > 0 }"
+            text="{m>/logText}"/>
+          <HBox alignItems="Center" visible="{= !!${m>/assessing} }" class="sapUiSmallMarginBottom">
+            <BusyIndicator size="1rem" class="sapUiTinyMarginEnd"/>
+            <Text text="Die KI prüft, welche Partner der Gruppe wirklich Dubletten sind …"/>
+          </HBox>
+          <MessageStrip visible="{= !!${m>/assessment/summary} }" showIcon="true" customIcon="sap-icon://ai"
+            class="sapUiSmallMarginBottom" type="{= ${m>/assessment/duplicates} > 0 ? 'Information' : 'Warning' }"
+            text="{= 'KI-Bewertung gegenüber ' + ${m>/assessment/reference} + ': ' + ${m>/assessment/summary} + (${m>/assessment/duplicates} > 0 ? ' Nur echte Dubletten sind einbezogen; mögliche Dubletten bei Bedarf selbst anhaken.' : ' Keine echte Dublette – nichts zusammenzuführen, außer Sie haken Partner selbst an.') }">
+            <link>
+              <Link text="Gegenüber behaltenem Partner neu bewerten" press=".onReassess"
+                visible="{= ${m>/assessment/reference} !== ${m>/keep} }"/>
+            </link>
+          </MessageStrip>
+          <MessageStrip visible="{= !!${m>/assessment/error} }" type="Warning" showIcon="true" class="sapUiSmallMarginBottom"
+            text="{m>/assessment/error}"/>
+          <Table items="{path: 'm>/partners', templateShareable: false}" popinLayout="GridSmall">
+            <columns>
+              <Column width="5rem" hAlign="Center"><Text text="Behalten"/></Column>
+              <Column width="6rem" hAlign="Center"><Text text="Einbeziehen"/></Column>
+              <Column><Text text="Partner"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Kunde / Lieferant"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Vertriebsbereiche / EkOrg"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="KI-Bewertung"/></Column>
+              <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Gründe Vorschlag"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem vAlign="Top" highlight="{= ${m>partner} === ${m>/keep} ? 'Success' : ${m>included} ? 'Information' : 'None' }">
+                <RadioButton groupName="keep" selected="{= ${m>partner} === ${m>/keep} }" select=".onKeepSelect"
+                  enabled="{m>included}"/>
+                <CheckBox selected="{m>included}" select=".onIncludeChange" enabled="{= ${m>partner} !== ${m>/keep} }"/>
+                <VBox>
+                  <HBox alignItems="Center" wrap="Wrap">
+                    <Link text="{m>partner}" press=".onPartnerPress" class="sapUiTinyMarginEnd"/>
+                    <Text text="{m>name}" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus visible="{= ${m>partner} === ${m>/suggested} }" text="Vorschlag" state="Success" inverted="true"/>
+                  </HBox>
+                  <Text text="{m>type_text} · {m>address}" class="mdsaStatus"/>
+                  <HBox class="mdsaBadges" wrap="Wrap">
+                    <ObjectStatus visible="{= !!${m>deleted} }" text="Löschvormerkung" state="Error" class="sapUiTinyMarginEnd"/>
+                    <ObjectStatus visible="{= ${m>blocks}.length > 0 }" text="{= ${m>blocks}.join(', ') }" state="Warning"/>
+                  </HBox>
+                </VBox>
+                <VBox>
+                  <Text text="{= ${m>kunnr} ? 'Kunde ' + ${m>kunnr} : '' }" visible="{= !!${m>kunnr} }"/>
+                  <Text text="{= ${m>lifnr} ? 'Lieferant ' + ${m>lifnr} : '' }" visible="{= !!${m>lifnr} }"/>
+                  <Text text="–" visible="{= !${m>kunnr} &amp;&amp; !${m>lifnr} }"/>
+                </VBox>
+                <VBox>
+                  <Text text="{= ${m>sales_areas}.length ? 'VB ' + ${m>sales_areas}.join(', ') : '' }" visible="{= ${m>sales_areas}.length > 0 }"/>
+                  <Text text="{= ${m>purchasing_orgs}.length ? 'EkOrg ' + ${m>purchasing_orgs}.join(', ') : '' }" visible="{= ${m>purchasing_orgs}.length > 0 }"/>
+                </VBox>
+                <VBox>
+                  <ObjectStatus text="{m>verdict}" visible="{= !!${m>verdict} }" inverted="true"
+                    state="{= ${m>verdict} === 'Dublette' ? 'Success' : ${m>verdict} === 'Mögliche Dublette' ? 'Warning' : ${m>verdict} === 'Referenz' ? 'Information' : 'Error' }"/>
+                  <Text text="{m>verdict_reason}" class="mdsaStatus" visible="{= !!${m>verdict_reason} }"/>
+                </VBox>
+                <Text text="{= ${m>reasons}.join(', ') }" class="mdsaStatus"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+          <VBox items="{path: 'm>/hints', templateShareable: false}" class="sapUiSmallMarginTop">
+            <MessageStrip type="Warning" showIcon="true" text="{m>}" class="sapUiTinyMarginBottom"/>
+          </VBox>
+        </WizardStep>
+
+        <!-- 2: deletion flag or blocks for the others -->
+        <WizardStep id="stepActions" title="Dubletten behandeln" icon="sap-icon://delete" validated="{= !!${m>/actionsValid} }"
+          activate=".onActionsActivate">
+          <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+            text="Die Löschprüfung liest offene Belege live aus SAP. Mit offenen Belegen ist keine Löschvormerkung möglich, nur Sperren. Kundensperre: Buchungs-, Auftrags-, Liefer- und Fakturasperre; Lieferantensperre: Buchungs- und Einkaufssperre."/>
+          <Table items="{path: 'm>/others', templateShareable: false}" popinLayout="GridSmall">
+            <columns>
+              <Column><Text text="Partner"/></Column>
+              <Column><Text text="Löschprüfung"/></Column>
+              <Column width="9rem" hAlign="Center"><Text text="Löschvormerkung"/></Column>
+              <Column width="8rem" hAlign="Center"><Text text="Zentrale Sperre"/></Column>
+              <Column width="8rem" hAlign="Center"><Text text="Kundensperre"/></Column>
+              <Column width="8rem" hAlign="Center"><Text text="Lieferantensperre"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem vAlign="Middle"
+                highlight="{= ${m>check/verdict} === 'blocked' ? 'Error' : ${m>check/verdict} === 'ok' ? 'Success' : 'Warning' }">
+                <VBox>
+                  <Text text="{m>partner} · {m>name}"/>
+                  <Text text="{= (${m>kunnr} ? 'Kunde ' + ${m>kunnr} + ' ' : '') + (${m>lifnr} ? 'Lieferant ' + ${m>lifnr} : '') }" class="mdsaStatus"/>
+                </VBox>
+                <HBox alignItems="Center">
+                  <BusyIndicator size="1rem" visible="{= !!${m>checking} }" class="sapUiTinyMarginEnd"/>
+                  <Link text="{= ${m>checking} ? 'wird geprüft …' : ${m>check/text} || 'nicht geprüft' }" press=".onShowCheck"
+                    enabled="{= !${m>checking} &amp;&amp; !!${m>check/checks} }" wrapping="true"/>
+                  <Button icon="sap-icon://refresh" type="Transparent" tooltip="Erneut prüfen" press=".onRecheck"
+                    enabled="{= !${m>checking} }"/>
+                </HBox>
+                <CheckBox selected="{m>delete}" enabled="{= ${m>check/verdict} === 'ok' }" select=".onActionChange"/>
+                <CheckBox selected="{m>central_block}" select=".onActionChange"/>
+                <CheckBox selected="{m>customer_block}" enabled="{m>has_customer}" select=".onActionChange"/>
+                <CheckBox selected="{m>vendor_block}" enabled="{m>has_vendor}" select=".onActionChange"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+        </WizardStep>
+
+        <!-- 3: best values -->
+        <WizardStep id="stepValues" title="Beste Werte" icon="sap-icon://learning-assistant" validated="{= !!${m>/advice} }"
+          activate=".onValuesActivate">
+          <BusyIndicator visible="{m>/adviceBusy}" text="Die KI vergleicht die Daten der Partner …" class="sapUiSmallMargin"/>
+          <MessageStrip type="Success" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !!${m>/advice/summary} }"
+            text="{m>/advice/summary}"/>
+          <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+            visible="{= !!${m>/advice} &amp;&amp; !${m>/advice/model} }"
+            text="Ohne KI: Werte des behaltenen Partners, fehlende von den anderen; Einträge der gelöschten Partner nicht übernommen."/>
+          <Title text="Abweichende Daten" level="H3" visible="{= !!${m>/advice} }" class="sapUiTinyMarginBottom"/>
+          <Text text="Alle Partner haben dieselben Stammdaten." visible="{= !!${m>/advice} &amp;&amp; !${m>/advice/groups}.length }"/>
+          <Table items="{path: 'm>/advice/groups', templateShareable: false}" visible="{= !!${m>/advice} &amp;&amp; ${m>/advice/groups}.length > 0 }"
+            popinLayout="GridSmall">
+            <columns>
+              <Column width="12rem"><Text text="Daten"/></Column>
+              <Column><Text text="Wert von"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Begründung"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem vAlign="Middle" highlight="{= ${m>choice} === ${m>/keep} ? 'None' : 'Information' }">
+                <Text text="{m>label}"/>
+                <Select selectedKey="{m>choice}" items="{path: 'm>options', templateShareable: false}" width="100%" change=".onValueChange">
+                  <core:Item key="{m>partner}" text="{= ${m>partner} ? ${m>partner} + ': ' + (${m>text} || '(leer)') : ${m>text} }"/>
+                </Select>
+                <Text text="{m>reason}" class="mdsaStatus"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+          <Title text="Zusätzliche Einträge der anderen Partner" level="H3" visible="{= ${m>/advice/items}.length > 0 }"
+            class="sapUiSmallMarginTop sapUiTinyMarginBottom"/>
+          <Table items="{path: 'm>/advice/items', templateShareable: false}" visible="{= ${m>/advice/items}.length > 0 }"
+            popinLayout="GridSmall">
+            <columns>
+              <Column width="6rem" hAlign="Center"><Text text="Übernehmen"/></Column>
+              <Column width="10rem"><Text text="Art"/></Column>
+              <Column><Text text="Wert"/></Column>
+              <Column width="6rem"><Text text="von"/></Column>
+              <Column minScreenWidth="Tablet" demandPopin="true"><Text text="Begründung"/></Column>
+            </columns>
+            <items>
+              <ColumnListItem vAlign="Middle">
+                <CheckBox selected="{m>take}" select=".onValueChange"/>
+                <Text text="{m>label}"/>
+                <VBox>
+                  <Text text="{m>text}"/>
+                  <Text text="ersetzt {m>replaces}" visible="{= !!${m>replaces} }" class="mdsaStatus"/>
+                </VBox>
+                <Text text="{m>partner}"/>
+                <Text text="{m>reason}" class="mdsaStatus"/>
+              </ColumnListItem>
+            </items>
+          </Table>
+        </WizardStep>
+
+        <!-- 4: review and send to the DXTO staging table -->
+        <WizardStep id="stepSend" title="Prüfen und senden" icon="sap-icon://upload-to-cloud" activate=".onSendActivate"
+          validated="false">
+          <BusyIndicator visible="{m>/previewBusy}" class="sapUiSmallMargin"/>
+          <VBox visible="{= !!${m>/preview} }">
+            <MessageStrip type="Information" showIcon="true" class="sapUiSmallMarginBottom"
+              text="Die Daten werden an einen Arbeitsvorrat in FIS/mpm übergeben. Dort können sie geprüft, freigegeben und nach SAP ERP verbucht werden."/>
+            <VBox items="{path: 'm>/preview/warnings', templateShareable: false}">
+              <MessageStrip type="Warning" showIcon="true" text="{m>}" class="sapUiTinyMarginBottom"/>
+            </VBox>
+            <MessageStrip type="Error" showIcon="true" visible="{= !${/config/sap_configured} }" class="sapUiSmallMarginBottom"
+              text="SAP_USER / SAP_PASSWORD sind auf dem Server nicht konfiguriert - Senden nicht möglich."/>
+            <MessageStrip visible="{= !!${m>/result} }" showIcon="true" class="sapUiSmallMarginBottom"
+              type="{= ${m>/result/ok} ? 'Success' : 'Error' }"
+              text="{= ${m>/result/ok} ? 'An FIS/mpm gesendet (HTTP ' + ${m>/result/status_code} + '), Protokoll Nr. ' + ${m>/logId} : 'Senden fehlgeschlagen (HTTP ' + ${m>/result/status_code} + ') - Antwort im Reiter SAP-Antwort, Protokoll Nr. ' + ${m>/logId} }"/>
+            <IconTabBar selectedKey="{m>/tab}" expandable="false" applyContentPadding="false" headerBackgroundDesign="Transparent">
+              <items>
+                <IconTabFilter key="changes" text="Änderungen ({= ${m>/preview/changes}.length })" icon="sap-icon://list">
+                  <Table items="{path: 'm>/preview/changes', templateShareable: false}" popinLayout="GridSmall">
+                    <columns>
+                      <Column width="7rem"><Text text="Partner"/></Column>
+                      <Column width="5rem"><Text text="Tabelle"/></Column>
+                      <Column width="5rem"><Text text="Aktion"/></Column>
+                      <Column><Text text="Änderung"/></Column>
+                      <Column minScreenWidth="Desktop" demandPopin="true"><Text text="Felder"/></Column>
+                    </columns>
+                    <items>
+                      <ColumnListItem vAlign="Top" highlight="{= ${m>partner} === ${m>/keep} ? 'Success' : 'Warning' }">
+                        <Text text="{m>partner}"/>
+                        <Text text="{m>table}"/>
+                        <Text text="{m>kind}"/>
+                        <Text text="{m>text}"/>
+                        <Text text="{path: 'm>fields', formatter: '.formatFields'}" class="mdsaStatus"/>
+                      </ColumnListItem>
+                    </items>
+                  </Table>
+                </IconTabFilter>
+                <IconTabFilter key="xml" text="XML" icon="sap-icon://source-code">
+                  <code:CodeEditor type="xml" height="420px" editable="false" value="{m>/preview/xml}" class="mdsaEditor"/>
+                </IconTabFilter>
+                <IconTabFilter key="response" text="SAP-Antwort" icon="sap-icon://response" visible="{= !!${m>/result} }">
+                  <code:CodeEditor type="xml" height="420px" editable="false" value="{m>/result/body}" class="mdsaEditor"/>
+                </IconTabFilter>
+              </items>
+            </IconTabBar>
+            <HBox class="sapUiSmallMarginTop">
+              <Button text="Herunterladen" icon="sap-icon://download" press=".onDownload" class="sapUiTinyMarginEnd"
+                enabled="{= !!${m>/preview/xml} }"/>
+              <Button text="An FIS/mpm senden" type="Emphasized" icon="sap-icon://upload-to-cloud" press=".onSend"
+                enabled="{= !!${/config/sap_configured} &amp;&amp; !!${m>/preview/xml} &amp;&amp; !${m>/result/ok} }"/>
+            </HBox>
+          </VBox>
+        </WizardStep>
+      </Wizard>
+    </f:content>
+  </f:DynamicPage>
+</mvc:View>

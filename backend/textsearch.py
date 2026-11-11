@@ -1,24 +1,34 @@
-"""Hybrid material search: exact keys, probabilistic lexical matching (BM25 with fuzzy / prefix / compound term
-expansion) and semantic vector search (Chroma), combined with Reciprocal Rank Fusion."""
+"""Search engine shared by all master data objects: exact keys, probabilistic lexical matching (BM25 with fuzzy /
+prefix / compound term expansion) and semantic vector search (Chroma), combined to one weighted score.
+
+A searchable object provides `id`, `search_text()` (everything a user may type) and `search_keys()`
+([(label, [values])] for exact matches of numbers and codes)."""
 import html
 import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Optional
+from typing import Optional, Protocol
 
 from rapidfuzz import fuzz, process
 
 from . import vectordb
-from .config import CANDIDATES, FUZZY_CUTOFF, MAX_RESULTS, MIN_SEMANTIC_SIMILARITY, RRF_K
-from .data import Material, load_materials
+from .config import (CANDIDATES, FUZZY_CUTOFF, HYBRID_SEMANTIC_WEIGHT, MIN_SEMANTIC_SIMILARITY,
+                     SEMANTIC_FULL_SIMILARITY)
 
 K1, B = 1.2, 0.75           # BM25 parameters
 FOLD = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "é": "e", "è": "e", "à": "a", "ç": "c"})
 
 # weight of a query term match by kind (exact > prefix > compound part > typo)
 WEIGHTS = {"exact": 1.0, "prefix": 0.85, "compound": 0.7, "fuzzy": 0.8}
+
+
+class Searchable(Protocol):
+    id: str
+
+    def search_text(self) -> str: ...
+
+    def search_keys(self) -> list[tuple[str, list[str]]]: ...
 
 
 def normalize(text: str) -> str:
@@ -49,24 +59,23 @@ class TermMatch:
 
 
 class LexicalIndex:
-    """BM25 over all searchable texts of a material, with typo-tolerant term expansion."""
+    """BM25 over all searchable texts of an object, with typo-tolerant term expansion."""
 
-    def __init__(self, materials: dict[str, Material]):
-        self.ids = list(materials)
+    def __init__(self, objects: dict[str, Searchable]):
+        self.ids = list(objects)
         self.postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
         self.lengths = []
         self.keys: dict[str, list[tuple[int, str]]] = defaultdict(list)   # compact key -> (doc, field label)
-        for doc, m in enumerate(materials.values()):
-            tokens = tokenize(m.search_text())
+        for doc, o in enumerate(objects.values()):
+            tokens = tokenize(o.search_text())
             self.lengths.append(len(tokens))
             for term, tf in Counter(tokens).items():
                 self.postings[term].append((doc, tf))
-            for label, values in (("Materialnummer", [m.id, m.matnr]), ("EAN", m.eans),
-                                  ("Lieferanten-Teilenr.", m.vendor_parts), ("Alte Materialnr.", [m.mara.get("BISMT", "")])):
+            for label, values in o.search_keys():
                 for value in values:
-                    if key := compact(value):
+                    if (key := compact(value)) and (doc, label) not in self.keys[key]:
                         self.keys[key].append((doc, label))
-        self.pos = {mid: doc for doc, mid in enumerate(self.ids)}
+        self.pos = {oid: doc for doc, oid in enumerate(self.ids)}
         self.n = len(self.ids)
         self.avg_len = sum(self.lengths) / max(self.n, 1)
         self.vocab = list(self.postings)
@@ -135,7 +144,7 @@ class LexicalIndex:
         if len(key) < 2:
             return []
         hits = list(self.keys.get(key, []))
-        if key.isdigit():   # material numbers are also found with leading zeros
+        if key.isdigit():   # numbers are also found with leading zeros
             hits += [h for h in self.keys.get(key.lstrip("0"), []) if h not in hits]
         return hits
 
@@ -152,13 +161,8 @@ class LexicalIndex:
         return " ".join(words) if changed else None
 
 
-@lru_cache(maxsize=1)
-def index() -> LexicalIndex:
-    return LexicalIndex(load_materials())
-
-
 def highlight(text: str, terms: set[str]) -> str:
-    """Short text as HTML (for sap.m.FormattedText) with the words that matched the query in bold."""
+    """Text as HTML (for sap.m.FormattedText) with the words that matched the query in bold."""
     out = []
     for part in re.split(r"(\W+)", text):
         tokens = set(tokenize(part)) if part.strip() else set()
@@ -167,123 +171,84 @@ def highlight(text: str, terms: set[str]) -> str:
     return "".join(out)
 
 
-def semantic(query: str, limit: int) -> list[tuple[str, float]]:
-    """[(material id, cosine similarity)] from the Chroma DB."""
-    col = vectordb.collection()
-    count = col.count()
-    if not count:
-        return []
-    result = col.query(query_embeddings=[list(vectordb.embed_query(query))], n_results=min(limit, count),
-                       include=["distances"])
-    return [(i, 1 - d) for i, d in zip(result["ids"][0], result["distances"][0]) if 1 - d >= MIN_SEMANTIC_SIMILARITY]
+@dataclass
+class Ranking:
+    """Fused ranking of one query: ids best first with the display relevance and the score of each retriever."""
+    hits: list[tuple[str, int, dict]]      # (id, relevance 0-100, {"exact": label, "lexical": .., "semantic": ..})
+    matched: dict[str, set]                # vocabulary terms that matched per id (for highlighting)
+    did_you_mean: Optional[str]
+    expansions: list[dict]
+    warnings: list[str]
 
 
-def matches_filters(m: Material, filters: dict) -> bool:
-    if not filters.get("include_deleted") and m.deleted:
-        return False
-    if filters.get("mtart") and m.mara.get("MTART") not in filters["mtart"]:
-        return False
-    if filters.get("matkl") and m.mara.get("MATKL") not in filters["matkl"]:
-        return False
-    if filters.get("vendor") and not set(filters["vendor"]) & set(m.vendors):
-        return False
-    return True
+def calibrate(similarity: float) -> float:
+    """Cosine similarity -> 0..1: MIN_SEMANTIC_SIMILARITY (unrelated) is 0, SEMANTIC_FULL_SIMILARITY and above 1."""
+    span = SEMANTIC_FULL_SIMILARITY - MIN_SEMANTIC_SIMILARITY
+    return min(max((similarity - MIN_SEMANTIC_SIMILARITY) / span, 0.0), 1.0)
 
 
-def relevance(mode: str, fused: float, info: dict) -> int:
-    """0-100 for display: the retriever's own score in single modes, the normalized RRF score in hybrid mode."""
-    if "exact" in info:
-        return 100
-    score = {"lexical": info.get("lexical"), "semantic": info.get("semantic")}.get(mode, fused)
-    return round(min(score or 0, 1) * 100)
+def rank(idx: LexicalIndex, collection: str, query: str, mode: str, pool: int) -> Ranking:
+    """mode: hybrid | semantic | lexical. Exact key hits always come first.
 
-
-def search(query: str, mode: str = "hybrid", filters: Optional[dict] = None, limit: int = 50) -> dict:
-    """mode: hybrid | semantic | lexical. Returns ranked hits with the score of each retriever."""
-    filters = filters or {}
-    materials = load_materials()
-    idx = index()
+    Hybrid: the candidates of both retrievers are scored by both. Lexical hits that the (approximate) vector search
+    did not return get their exact similarity from the stored embeddings. The score is the weighted sum of the
+    lexical score and the calibrated similarity; without any lexical hit only the similarity counts."""
     query = query.strip()
     warnings = []
-    limit = min(limit, MAX_RESULTS)
-    pool = CANDIDATES * (5 if any(filters.get(k) for k in ("mtart", "matkl", "vendor")) else 1)
-
     exact = [(idx.ids[doc], label) for doc, label in idx.exact(query)]
     lexical, matched, per_token = ([], {}, [])
     if mode in ("hybrid", "lexical"):
         lexical, matched, per_token = idx.search(query, pool)
-    sem = []
+    lex = {idx.ids[doc]: score for doc, score in lexical}
+    sem: dict[str, float] = {}
     if mode in ("hybrid", "semantic"):
-        if vectordb.indexed_count():
-            sem = semantic(query, pool)
+        if vectordb.indexed_count(collection):
+            # ids missing in the lexical index: vector index older than the input files
+            sem = {oid: sim for oid, sim in vectordb.query(collection, query, pool) if oid in idx.pos}
+            if mode == "hybrid":
+                exact_ids = {oid for oid, _ in exact}   # a similarity to a number or code says nothing
+                missing = [oid for oid in lex if oid not in sem and oid not in exact_ids]
+                sem.update(vectordb.similarities(collection, query, missing))
         else:
             warnings.append("Der Vektorindex ist leer - semantische Suche nicht verfügbar "
                             "(python -m backend.indexer ausführen)")
 
-    # Reciprocal Rank Fusion; exact key hits always come first
-    fused: dict[str, float] = defaultdict(float)
-    info: dict[str, dict] = defaultdict(dict)
-    for rank, (mid, label) in enumerate(exact):
-        fused[mid] += 1.0 + 1 / (rank + 1)
-        info[mid]["exact"] = label
-    for rank, (doc, score) in enumerate(lexical):
-        fused[idx.ids[doc]] += 1 / (RRF_K + rank + 1)
-        info[idx.ids[doc]]["lexical"] = round(score, 3)
-    for rank, (mid, sim) in enumerate(sem):
-        fused[mid] += 1 / (RRF_K + rank + 1)
-        info[mid]["semantic"] = round(sim, 3)
-    best_possible = (2 if mode == "hybrid" else 1) / (RRF_K + 1)
+    weight = HYBRID_SEMANTIC_WEIGHT if lex else 1.0
 
-    hits = []
-    for mid, score in sorted(fused.items(), key=lambda x: -x[1]):
-        m = materials.get(mid)
-        if m is None or not matches_filters(m, filters):
-            continue
-        terms = matched.get(idx.pos[mid], set())
-        hits.append({
-            **m.summary(),
-            "text_html": highlight(m.short_text, terms),
-            "relevance": relevance(mode, score / best_possible, info[mid]),
-            "exact": info[mid].get("exact"),
-            "lexical": info[mid].get("lexical"),
-            "semantic": info[mid].get("semantic"),
-        })
-    total = len(hits)
-    return {
-        "query": query,
-        "mode": mode,
-        "total": total,
-        "hits": hits[:limit],
-        "did_you_mean": idx.did_you_mean(per_token),
-        "expansions": [{"token": t, "terms": [{"term": m.term, "kind": m.kind} for m in ex[:8]]}
-                       for t, ex in per_token],
-        "warnings": warnings,
-    }
+    def score(oid: str) -> float:
+        if mode == "lexical":
+            return lex.get(oid, 0.0)
+        if mode == "semantic":
+            return sem.get(oid, 0.0)
+        return (1 - weight) * lex.get(oid, 0.0) + weight * calibrate(sem.get(oid, 0.0))
+
+    exact_rank = {}
+    for r, (oid, label) in enumerate(exact):
+        exact_rank.setdefault(oid, (r, label))
+    candidates = list(dict.fromkeys([*exact_rank, *lex, *(sem if mode != "lexical" else ())]))
+    scores = {oid: score(oid) for oid in candidates}
+    # exact key hits first, then by score; equal scores keep the order lexical > semantic > id (deterministic)
+    order = sorted(candidates, key=lambda oid: (exact_rank.get(oid, (math.inf,))[0], -round(scores[oid], 6),
+                                                -lex.get(oid, 0.0), -sem.get(oid, 0.0), oid))
+
+    def info(oid: str) -> dict:
+        s = sem.get(oid)
+        return {"exact": exact_rank[oid][1] if oid in exact_rank else None,
+                "lexical": round(lex[oid], 3) if oid in lex else None,
+                "semantic": round(s, 3) if s is not None else None}
+
+    hits = [(oid, 100 if oid in exact_rank else round(min(scores[oid], 1) * 100), info(oid)) for oid in order]
+    return Ranking(
+        hits=hits,
+        matched={idx.ids[doc]: terms for doc, terms in matched.items()},
+        did_you_mean=idx.did_you_mean(per_token),
+        expansions=[{"token": t, "terms": [{"term": m.term, "kind": m.kind} for m in ex[:8]]} for t, ex in per_token],
+        warnings=warnings,
+    )
 
 
-def suggest(prefix: str, limit: int = 8) -> list[dict]:
-    """Search-as-you-type: lexical only (no embedding call per keystroke)."""
-    materials = load_materials()
-    idx = index()
-    docs, _, _ = idx.search(prefix, limit * 3)
-    exact = [doc for doc, _ in idx.exact(prefix)]
-    result, seen = [], set()
-    for doc in exact + [d for d, _ in docs]:
-        m = materials[idx.ids[doc]]
-        if m.short_text and m.short_text not in seen and not m.deleted:
-            seen.add(m.short_text)
-            result.append({"matnr": m.id, "text": m.short_text})
-        if len(result) >= limit:
-            break
-    return result
-
-
-def facets() -> dict:
-    """Filter values with their number of materials."""
-    counts = {"mtart": Counter(), "matkl": Counter(), "vendor": Counter()}
-    for m in load_materials().values():
-        counts["mtart"][m.mara.get("MTART", "")] += 1
-        counts["matkl"][m.mara.get("MATKL", "")] += 1
-        counts["vendor"].update(m.vendors)
-    return {k: [{"key": v, "count": n} for v, n in sorted(c.items(), key=lambda x: (-x[1], x[0])) if v]
-            for k, c in counts.items()}
+def facet_list(counter: Counter, labels: Optional[dict] = None) -> list[dict]:
+    """Filter values with their number of objects, most frequent first."""
+    labels = labels or {}
+    return [{"key": v, "text": labels.get(v, v), "count": n}
+            for v, n in sorted(counter.items(), key=lambda x: (-x[1], x[0])) if v]

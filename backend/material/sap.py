@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-from .config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SAP_LOGON_LANGUAGE, SEPARATOR,
+from ..config import (ENDPOINT_URL, JOB_NAME, KEY_FIELD, OPERATION, REQUEST_TIMEOUT, SAP_LOGON_LANGUAGE, SEPARATOR,
                      SOAP_ACTION, VARIANT, VIA_JOB)
 from .data import Material
 
@@ -38,26 +38,33 @@ def to_line(row: dict, fields: list[str]) -> str:
     return SEPARATOR.join(clean(row.get(f)) for f in fields) + SEPARATOR
 
 
-def build_xml(material: Material) -> str:
+def build_message(tables: dict[str, tuple[list[str], list[dict]]], variant: str = VARIANT) -> str:
+    """DXTO import message: per table (TObj = table name) a header line with the field names and one line per row.
+    `tables`: table -> (fields, rows); used for materials and business partners."""
     envelope = ET.Element(f"{{{SOAP_NS}}}Envelope")
     ET.SubElement(envelope, f"{{{SOAP_NS}}}Header")
     body = ET.SubElement(envelope, f"{{{SOAP_NS}}}Body")
     call = ET.SubElement(body, f"{{{SAP_NS}}}{OPERATION}")
-    for tag, value in (("IfSep", SEPARATOR), ("IfVariant", VARIANT), ("IfViaJob", VIA_JOB), ("IfJobname", JOB_NAME)):
+    for tag, value in (("IfSep", SEPARATOR), ("IfVariant", variant), ("IfViaJob", VIA_JOB), ("IfJobname", JOB_NAME)):
         ET.SubElement(call, tag).text = value or None
 
-    tables = material.tables()
     it_dat = ET.SubElement(call, "ItDat")
-    for table, fields in xml_tables(material).items():
+    for table, (fields, rows) in tables.items():
         item = ET.SubElement(it_dat, "item")
         ET.SubElement(ET.SubElement(item, "TObj"), "item").text = table
         t_str = ET.SubElement(item, "TStr")
         ET.SubElement(t_str, "item").text = SEPARATOR.join(fields) + SEPARATOR
-        for row in tables[table]:
-            ET.SubElement(t_str, "item").text = to_line({**row, KEY_FIELD: material.matnr}, fields)
+        for row in rows:
+            ET.SubElement(t_str, "item").text = to_line(row, fields)
 
     ET.indent(envelope, space="  ")
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(envelope, encoding="unicode")
+
+
+def build_xml(material: Material) -> str:
+    tables = material.tables()
+    return build_message({table: (fields, [{**row, KEY_FIELD: material.matnr} for row in tables[table]])
+                          for table, fields in xml_tables(material).items()})
 
 
 def message(material: Material) -> dict:
