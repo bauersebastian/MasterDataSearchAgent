@@ -5,7 +5,7 @@ imagePullSecrets:
 
 image:
   repository: code.fis-gmbh.de:4567/fis-gruppe/intern/ai-solutions/ai-apps/ai-services/mpm-master_data_search
-  tag: "6561a251"
+  tag: "1182215f"
   pullPolicy: IfNotPresent
 
 service:
