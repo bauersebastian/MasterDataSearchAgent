@@ -20,6 +20,7 @@
           <Button text="Neu berechnen" icon="sap-icon://refresh" type="Transparent" press=".onRefresh"
             tooltip="Kandidaten aller Partner neu ermitteln (z. B. nach dem Aufbau des Vektorindex)"/>
           <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+          <Button text="Token-Verbrauch" icon="sap-icon://measure" type="Transparent" press=".onUsage"/>
           <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
         </f:actions>
       </f:DynamicPageTitle>

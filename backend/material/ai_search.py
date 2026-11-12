@@ -82,7 +82,7 @@ def retrieve(query: str, interpretation: Interpretation, filters: dict) -> list[
 
 
 def ai_search(query: str, filters: dict) -> dict:
-    interpretation = llm.parse(INTERPRET_PROMPT, query, Interpretation)
+    interpretation = llm.parse(INTERPRET_PROMPT, query, Interpretation, "material-ai-search")
     candidates = retrieve(query, interpretation, filters)
     result = {
         "query": query, "mode": "ai", "hits": [], "total": 0, "did_you_mean": None, "expansions": [], "warnings": [],
@@ -98,7 +98,7 @@ def ai_search(query: str, filters: dict) -> dict:
     user = (f"Request: {query}\n\nSearched product: {interpretation.product}\nRequirements:\n"
             + "\n".join(f"- {r.text}" for r in interpretation.requirements) + "\n\nCandidates:\n"
             + "\n".join(json.dumps(compact(materials[h["matnr"]]), ensure_ascii=False) for h in candidates))
-    assessment = llm.parse(ASSESS_PROMPT, user, Assessment)
+    assessment = llm.parse(ASSESS_PROMPT, user, Assessment, "material-ai-search")
 
     by_id = {h["matnr"]: h for h in candidates}
     hits = []

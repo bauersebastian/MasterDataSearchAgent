@@ -28,6 +28,11 @@ EMBEDDING_BATCH = int(os.getenv("MDSA_EMBEDDING_BATCH", "256"))    # documents p
 MODEL = os.getenv("MDSA_MODEL", "gpt-5.6-luna")                   # duplicate check; on Azure: the deployment name
 REASONING_EFFORT = os.getenv("MDSA_REASONING_EFFORT", "low")
 
+# token consumption of the OpenAI calls (SQLite, page /usage.html); in data/ = on the persistent volume
+USAGE_DB = Path(os.getenv("MDSA_USAGE_DB", APP_DIR / "data" / "usage.sqlite"))
+# day, week (Monday) and month of the consumption begin at midnight of this time zone
+USAGE_TIMEZONE = os.getenv("MDSA_USAGE_TIMEZONE", "Europe/Berlin")
+
 # --- Vector DB ------------------------------------------------------------
 # Bundled with the app (demo): built once with `python -m backend.indexer`
 CHROMA_DIR = Path(os.getenv("MDSA_CHROMA_DIR", APP_DIR / "data" / "chroma"))

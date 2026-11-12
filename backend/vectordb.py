@@ -10,6 +10,7 @@ from chromadb.config import Settings
 from chromadb.errors import NotFoundError
 from openai import OpenAI
 
+from . import usage
 from .config import (CHROMA_DIR, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, HNSW_CONSTRUCTION_EF, HNSW_M, HNSW_SEARCH_EF,
                      MIN_SEMANTIC_SIMILARITY, OPENAI_BASE_URL)
 
@@ -21,6 +22,7 @@ def client() -> OpenAI:
 
 def embed(texts: list[str]) -> list[list[float]]:
     response = client().embeddings.create(model=EMBEDDING_MODEL, input=texts, dimensions=EMBEDDING_DIMENSIONS)
+    usage.record("embedding", response)
     return [d.embedding for d in sorted(response.data, key=lambda d: d.index)]
 
 

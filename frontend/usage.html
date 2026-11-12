@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>Token-Verbrauch</title>
+  <!-- Standalone page: not part of the UI5 app, reads /api/usage (backend/usage.py). -->
+  <style>
+    :root {
+      --bg: #f5f6f7; --surface: #fff; --border: #d9dde1; --text: #1d2d3e; --muted: #5b738b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #12171c; --surface: #1d232a; --border: #3a4552; --text: #eaecee; --muted: #a9b4be; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+           font: 14px/1.45 "72", "Segoe UI", system-ui, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px;
+             margin-bottom: 16px; }
+    h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    h2 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+    .muted { color: var(--muted); font-size: 12px; }
+    button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+             border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+    .total { margin: 10px 0 2px; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 12px 0 0; padding-top: 10px;
+         border-top: 1px solid var(--border); }
+    dt { color: var(--muted); }
+    dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .sub dt { padding-left: 12px; font-size: 12px; }
+    .sub dd { color: var(--muted); font-size: 12px; }
+    .credits { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; margin-top: 8px;
+               padding-top: 8px; border-top: 1px solid var(--border); font-weight: 600; }
+    .credits span:last-child { font-variant-numeric: tabular-nums; }
+    #error { margin-top: 16px; color: #b00; }
+    @media (prefers-color-scheme: dark) { #error { color: #ff8a8a; } }
+    footer { margin-top: 16px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Token-Verbrauch der LLM-Aufrufe</h1>
+    <span><span class="muted" id="updated"></span> <button id="reload" type="button">Aktualisieren</button></span>
+  </header>
+  <div class="tiles" id="tiles"></div>
+  <div id="error" role="alert"></div>
+  <footer class="muted" id="footer"></footer>
+</main>
+<script>
+  const number = new Intl.NumberFormat("de-DE");
+  const dateTime = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
+  const date = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" });
+  const credit = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  // FIS AI Credits per 100,000 tokens; converted here, not stored. Embedding tokens are not billed.
+  const CREDITS_PER_100K = { input: 1, output: 5 };
+  const credits = usage =>
+    ((usage.input_tokens - (usage.embedding_tokens || 0)) * CREDITS_PER_100K.input
+      + usage.output_tokens * CREDITS_PER_100K.output) / 100000;
+  const KINDS = {
+    "material-ai-search": "KI-Suche Material", "material-duplicates": "Dublettenprüfung Material",
+    "partner-ai-search": "KI-Suche Geschäftspartner", "partner-duplicates": "Dublettenprüfung Geschäftspartner",
+    "partner-merge": "Golden Record", embedding: "Embedding",
+  };
+
+  function element(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function tile(title, subtitle, usage) {
+    const node = element("section", undefined, "tile");
+    node.append(element("h2", title), element("div", subtitle, "muted"));
+    if (!usage) {
+      node.append(element("div", "–", "total"), element("div", "noch kein Aufruf", "muted"));
+      return node;
+    }
+    node.append(element("div", number.format(usage.total_tokens), "total"), element("div", "Tokens gesamt", "muted"));
+    const list = element("dl");
+    const row = (label, value, sub) => {
+      const dt = element("dt", label), dd = element("dd", number.format(value));
+      if (sub) { const wrap = element("div", undefined, "sub"); wrap.style.display = "contents"; wrap.append(dt, dd); list.append(wrap); }
+      else list.append(dt, dd);
+    };
+    row("Input", usage.input_tokens);
+    row("davon aus Cache", usage.cached_tokens, true);
+    if (usage.embedding_tokens !== undefined) row("davon Embeddings", usage.embedding_tokens, true);
+    row("Output", usage.output_tokens);
+    row("davon Reasoning", usage.reasoning_tokens, true);
+    if (usage.calls !== undefined) row("Aufrufe", usage.calls);
+    const sum = element("div", undefined, "credits");
+    sum.append(element("span", "FIS AI Credits"), element("span", credit.format(credits(usage))));
+    list.append(sum);
+    node.append(list);
+    return node;
+  }
+
+  async function load() {
+    const error = document.getElementById("error");
+    error.textContent = "";
+    try {
+      const response = await fetch("api/usage", { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const data = await response.json();
+      const last = data.last;
+      document.getElementById("tiles").replaceChildren(
+        tile("Letzter LLM-Aufruf", last ? `${dateTime.format(new Date(last.ts))} · ${KINDS[last.kind] || last.kind}` : " ", last),
+        tile("Heute", date.format(new Date(data.today.since)), data.today),
+        tile("Diese Woche", "seit Montag, " + date.format(new Date(data.week.since)), data.week),
+        tile("Dieser Monat", "seit " + date.format(new Date(data.month.since)), data.month));
+      document.getElementById("updated").textContent = "Stand " + dateTime.format(new Date());
+      document.getElementById("footer").textContent = `Zeiträume in der Zeitzone ${data.timezone}. ` +
+        `FIS AI Credits: ${CREDITS_PER_100K.input} Credit je 100.000 Input-Tokens, ` +
+        `${CREDITS_PER_100K.output} Credits je 100.000 Output-Tokens; Embeddings werden nicht berechnet.`;
+    } catch (e) {
+      error.textContent = "Der Verbrauch konnte nicht geladen werden: " + e.message;
+    }
+  }
+
+  document.getElementById("reload").addEventListener("click", load);
+  load();
+</script>
+</body>
+</html>

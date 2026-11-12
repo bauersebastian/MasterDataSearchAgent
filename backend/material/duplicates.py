@@ -140,6 +140,6 @@ def assess(matnr: str, candidate_ids: Optional[list[str]] = None) -> dict:
     user = ("Reference material:\n" + json.dumps(compact(materials[matnr]), ensure_ascii=False)
             + "\n\nCandidates:\n" + "\n".join(json.dumps(compact(materials[c]), ensure_ascii=False)
                                               for c in candidate_ids))
-    result = llm.parse(SYSTEM_PROMPT, user, DuplicateAssessment)
+    result = llm.parse(SYSTEM_PROMPT, user, DuplicateAssessment, "material-duplicates")
     verdicts = [v for v in result.verdicts if v.matnr in candidate_ids]
     return {"summary": result.summary, "verdicts": [v.model_dump() for v in verdicts], "model": MODEL}

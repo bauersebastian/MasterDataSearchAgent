@@ -6,3 +6,4 @@ chromadb==1.5.9
 rapidfuzz>=3
 python-dotenv
 requests
+tzdata

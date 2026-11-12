@@ -18,6 +18,7 @@
             tooltip="Alle Geschäftspartner mit wahrscheinlichen Dubletten" enabled="{= !!${/config/partner/available} }"/>
           <Button text="Zurücksetzen" icon="sap-icon://reset" type="Transparent" press=".onReset"/>
           <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+          <Button text="Token-Verbrauch" icon="sap-icon://measure" type="Transparent" press=".onUsage"/>
         </f:actions>
       </f:DynamicPageTitle>
     </f:title>

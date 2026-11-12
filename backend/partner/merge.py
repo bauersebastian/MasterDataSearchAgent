@@ -356,7 +356,7 @@ def advice(ids: list[str], keep_id: str) -> dict:
         "list_entries": [{"key": i["key"], "kind": i["label"], "value": i["text"], "from_partner": i["partner"],
                           **({"replaces": i["replaces"]} if i["replaces"] else {})} for i in items],
     }
-    answer = llm.parse(ADVICE_PROMPT, json.dumps(request, ensure_ascii=False), MergeAdvice)
+    answer = llm.parse(ADVICE_PROMPT, json.dumps(request, ensure_ascii=False), MergeAdvice, "partner-merge")
     by_key = {g["key"]: g for g in groups}
     for c in answer.groups:
         g = by_key.get(c.key)

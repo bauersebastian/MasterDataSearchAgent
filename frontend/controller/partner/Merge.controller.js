@@ -416,6 +416,11 @@ sap.ui.define([
       this.getOwnerComponent().getRouter().navTo("help");
     },
 
+    // standalone page outside the UI5 app; a new tab keeps the current search
+    onUsage() {
+      window.open("usage.html", "_blank", "noopener");
+    },
+
     onBack() {
       if (History.getInstance().getPreviousHash() !== undefined) {
         window.history.go(-1);

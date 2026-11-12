@@ -17,6 +17,7 @@ The switch *Material | Geschäftspartner* above the search field changes the obj
   `backend/partner/`.
 - **frontend/** – SAPUI5 app in Fiori design, loaded from the SAPUI5 CDN (no Node build): `view/material/` and
   `view/partner/` (search page in List Report style, object page `sap.uxap.ObjectPageLayout`), likewise `controller/`.
+  `usage.html` is a standalone page outside the app (see *Token consumption*).
 - **data/chroma/** – the Chroma vector DB with the collections `materials` and `partners`. It is not part of the
   repository: build it on the machine that runs the app (see *Setup*); at runtime only the search query is embedded.
 - **helm/** – Helm chart for the Kubernetes deployment (see *Kubernetes*).
@@ -379,6 +380,21 @@ As in the research agent, the default is the Azure OpenAI resource `https://fisg
 on that resource – an embeddings deployment of `text-embedding-3-large` is required. Set `MDSA_OPENAI_BASE_URL=` (empty)
 to use api.openai.com instead.
 
+## Token consumption
+
+Every OpenAI call reports its token usage in the response; `backend/usage.py` logs it to the SQLite database
+`data/usage.sqlite` (`MDSA_USAGE_DB`, on the persistent volume in Kubernetes), one row per call: time, kind
+(AI search, duplicate check, golden record, embedding), model, input / output / total tokens, cached input tokens and
+reasoning tokens. LLM calls are logged in `llm.parse`, embeddings in `vectordb.embed` – that includes the search
+queries and the indexer (also the init container at a deployment). Failed calls return no usage and are not logged.
+
+The page **`/usage.html`** shows the last LLM call and the sums of today, this week (from Monday) and this month
+(`MDSA_USAGE_TIMEZONE`, default `Europe/Berlin`), with the embedding tokens listed separately, converted to
+**FIS AI Credits** (1 credit per 100,000 input tokens, 5 credits per 100,000 output tokens; embedding tokens are shown but not billed;
+constants in `frontend/usage.html`, not stored). It is a standalone page outside the UI5 app that only reads
+`GET /api/usage`; the button *Token-Verbrauch* beside *Hilfe* opens it in a new tab. The tracking is independent of
+the search logic and never fails a call.
+
 ## API
 
 | Method | Path | Body | Result |
@@ -408,6 +424,7 @@ to use api.openai.com instead.
 | POST | `/api/partners/{partner}/deletion-check` | – | open documents blocking the deletion: `verdict` (blocked / incomplete / ok), `checks` with documents |
 | GET | `/api/partners/{partner}/duplicates` | – | duplicate candidates with signals |
 | POST | `/api/partners/{partner}/duplicates/assess` | `{candidates: [partner]}` (optional) | LLM verdicts |
+| GET | `/api/usage` | – | `{timezone, last, today, week, month}` token consumption of the OpenAI calls |
 
 ## Notes
 

@@ -203,7 +203,7 @@ def assess(partner: str, candidate_ids: Optional[list[str]] = None) -> dict:
 
     view = lambda pid: json.dumps(partners[pid].llm_view(materials=10), ensure_ascii=False)   # noqa: E731
     user = ("Reference partner:\n" + view(partner) + "\n\nCandidates:\n" + "\n".join(view(c) for c in candidate_ids))
-    result = llm.parse(SYSTEM_PROMPT, user, DuplicateAssessment)
+    result = llm.parse(SYSTEM_PROMPT, user, DuplicateAssessment, "partner-duplicates")
     verdicts = [v for v in result.verdicts if (v.partner.lstrip("0") or v.partner) in candidate_ids]
     for v in verdicts:
         v.partner = v.partner.lstrip("0") or v.partner

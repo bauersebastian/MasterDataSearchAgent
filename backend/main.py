@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import config, vectordb
+from . import config, usage, vectordb
 from .material import api as material_api
 from .material import search as material_search
 from .material.data import load_materials
@@ -44,6 +44,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Master Data Search Agent", lifespan=lifespan)
 app.include_router(material_api.router)
 app.include_router(partner_api.router)
+app.include_router(usage.router)
 
 
 @app.get("/api/config")

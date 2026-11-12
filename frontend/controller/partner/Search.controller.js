@@ -183,6 +183,11 @@ sap.ui.define([
       this.getOwnerComponent().getRouter().navTo("help");
     },
 
+    // standalone page outside the UI5 app; a new tab keeps the current search
+    onUsage() {
+      window.open("usage.html", "_blank", "noopener");
+    },
+
     onHitPress(event) {
       const partner = event.getSource().getBindingContext("bp").getProperty("partner");
       this.getOwnerComponent().getRouter().navTo("partner", { partner });

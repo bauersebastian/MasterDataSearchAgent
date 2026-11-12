@@ -18,6 +18,7 @@
         <f:actions>
           <Button text="Protokoll" icon="sap-icon://history" type="Transparent" press=".onShowLog"/>
           <Button text="Hilfe" icon="sap-icon://sys-help" type="Transparent" press=".onHelp"/>
+          <Button text="Token-Verbrauch" icon="sap-icon://measure" type="Transparent" press=".onUsage"/>
           <Button icon="sap-icon://decline" type="Transparent" tooltip="Schließen" press=".onBack"/>
         </f:actions>
       </f:DynamicPageTitle>
